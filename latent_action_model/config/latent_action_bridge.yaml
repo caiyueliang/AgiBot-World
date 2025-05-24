@@ -1,0 +1,57 @@
+model:
+  image_channels: 3
+
+  lam_model_dim: 512
+  lam_latent_dim: 128
+  lam_num_latents: 32
+  lam_patch_size: 8
+  lam_enc_blocks: 8
+  lam_dec_blocks: 8
+  lam_num_heads: 8
+
+  vq_beta: 0.25
+  log_interval: 10
+  log_path: /cpfs01/user/buqingwen/OmniEmbodiment/logs
+  optimizer:
+    class_path: torch.optim.AdamW
+    init_args:
+      lr: 1e-4
+      weight_decay: 1e-2
+
+  task_name: tmp_test_ego4d
+  make_data_pair: &make_data_pair false
+  control_aware: false
+  multi_view: false
+
+data:
+  data_root: /cpfs01/user/buqingwen/OmniEmbodiment/latent_action_model
+  data_mix: Ego4D
+  batch_size: 4
+  resolution: 224
+  num_frames: 16  # TODO
+  episodic: false
+  shuffle_buffer_size: 10
+  image_aug: true
+
+trainer:
+  max_epochs: 10
+  accelerator: gpu
+  devices: 1
+  strategy: ddp_find_unused_parameters_false
+  precision: 16-mixed
+  log_every_n_steps: 10
+  gradient_clip_val: 0.3
+
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: /cpfs01/user/buqingwen/OmniEmbodiment/logs/tmp_test_ego4d
+        verbose: true
+        save_last: true
+        save_top_k: -1
+
+  logger:
+    - class_path: lightning.pytorch.loggers.TensorBoardLogger
+      init_args:
+        save_dir: /cpfs01/user/buqingwen/OmniEmbodiment/logs
+        name: tmp_test_ego4d

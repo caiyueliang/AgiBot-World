@@ -1,0 +1,58 @@
+model:
+  image_channels: 3
+
+  lam_model_dim: 768
+  lam_latent_dim: 48
+  lam_num_latents: 768
+  lam_patch_size: 8
+  lam_enc_blocks: 18
+  lam_dec_blocks: 18
+  lam_num_heads: 12
+
+  vq_beta: 0.25
+  log_interval: 1000
+  log_path: /cpfs01/shared/opendrivelab/opendrivelab_hdd/gaoshenyuan/UMASS_logs/exp_imgs
+  optimizer:
+    class_path: torch.optim.AdamW
+    init_args:
+      lr: 5e-5
+      weight_decay: 1e-2
+
+  make_data_pair: &make_data_pair false
+
+data:
+  batch_size: 20
+  data_root: ../data
+  env_source: retro
+  padding: repeat
+  randomize: true
+  resolution: 128
+  num_frames: 6
+  output_format: t h w c
+  samples_per_epoch: 1000000
+  sampling_strategy: log
+  alive: false
+  make_data_pair: *make_data_pair
+
+trainer:
+  max_epochs: 1000
+  accelerator: gpu
+  devices: 1
+  strategy: ddp_find_unused_parameters_false
+  precision: 16-mixed
+  log_every_n_steps: 1000
+  gradient_clip_val: 0.3
+
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: /cpfs01/shared/opendrivelab/opendrivelab_hdd/gaoshenyuan/UMASS_logs/exp_ckpts
+        verbose: true
+        save_last: true
+        save_top_k: -1
+
+  logger:
+    - class_path: lightning.pytorch.loggers.TensorBoardLogger
+      init_args:
+        save_dir: /cpfs01/shared/opendrivelab/opendrivelab_hdd/gaoshenyuan/UMASS_logs/exp_logs
+        name: genie
