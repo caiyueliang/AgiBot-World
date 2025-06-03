@@ -303,12 +303,12 @@ class ControlAwareLatentActionModel(nn.Module):
 
         if not stage_2:
             # Load T5 text encoder model
-            self.text_encoder = T5EncoderModel.from_pretrained('/cpfs01/user/buqingwen/t5-small')
+            self.text_encoder = T5EncoderModel.from_pretrained('t5-small')
             self.text_encoder.requires_grad_(False)
             self.lang_proj = nn.Linear(512, model_dim)
 
             # Load T5 tokenizer
-            self.tokenizer = T5Tokenizer.from_pretrained('/cpfs01/user/buqingwen/t5-small')
+            self.tokenizer = T5Tokenizer.from_pretrained('t5-small')
 
         self.stage_2 = stage_2
 
@@ -462,9 +462,9 @@ class DINOLatentActionModel(nn.Module):
         patch_token_dim = in_dim * patch_size ** 2
 
         self.dino_transform = transforms.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD)
-        self.dino_encoder = torch.hub.load('/cpfs01/shared/opendrivelab/chenjin/facebookresearch_dinov2_main', 'dinov2_vitb14_reg',
+        self.dino_encoder = torch.hub.load('facebookresearch_dinov2_main', 'dinov2_vitb14_reg',
                                           source='local', pretrained=False)
-        self.dino_encoder.load_state_dict(torch.load('/cpfs01/shared/opendrivelab/chenjin/facebookresearch_dinov2_main/dinov2_vitb14_reg4_pretrain.pth', map_location='cpu'))
+        self.dino_encoder.load_state_dict(torch.load('facebookresearch_dinov2_main/dinov2_vitb14_reg4_pretrain.pth', map_location='cpu'))
         self.dino_encoder.requires_grad_(False)
 
         dino_dim = 768
@@ -575,9 +575,9 @@ class UncontrolledDINOLatentActionModel(nn.Module):
         patch_token_dim = in_dim * patch_size ** 2
 
         self.dino_transform = transforms.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD)
-        self.dino_encoder = torch.hub.load('/cpfs01/user/buqingwen/facebookresearch_dinov2_main', 'dinov2_vitb14_reg',
+        self.dino_encoder = torch.hub.load('facebookresearch_dinov2_main', 'dinov2_vitb14_reg',
                                           source='local', pretrained=False)
-        self.dino_encoder.load_state_dict(torch.load('/cpfs01/user/buqingwen/dinov2_vitb14_reg4_pretrain.pth', map_location='cpu'))
+        self.dino_encoder.load_state_dict(torch.load('dinov2_vitb14_reg4_pretrain.pth', map_location='cpu'))
         self.dino_encoder.requires_grad_(False)
 
         dino_dim = 768
@@ -615,12 +615,12 @@ class UncontrolledDINOLatentActionModel(nn.Module):
         )
 
         # Load T5 text encoder model
-        self.text_encoder = T5EncoderModel.from_pretrained('/cpfs01/user/buqingwen/t5-small')
+        self.text_encoder = T5EncoderModel.from_pretrained('t5-small')
         self.text_encoder.requires_grad_(False)
         self.lang_proj = nn.Linear(512, model_dim)
 
         # Load T5 tokenizer
-        self.tokenizer = T5Tokenizer.from_pretrained('/cpfs01/user/buqingwen/t5-small')
+        self.tokenizer = T5Tokenizer.from_pretrained('t5-small')
 
     def encode_text(self, lang: List):
         # Tokenize the batch with padding to the longest sequence
@@ -732,9 +732,9 @@ class ControllableDINOLatentActionModel(nn.Module):
         patch_token_dim = in_dim * patch_size ** 2
 
         self.dino_transform = transforms.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD)
-        self.dino_encoder = torch.hub.load('/cpfs01/shared/opendrivelab/qwbu/facebookresearch_dinov2_main', 'dinov2_vitb14_reg',
+        self.dino_encoder = torch.hub.load('facebookresearch_dinov2_main', 'dinov2_vitb14_reg',
                                           source='local', pretrained=False)
-        self.dino_encoder.load_state_dict(torch.load('/cpfs01/shared/opendrivelab/qwbu/dinov2_vitb14_reg4_pretrain.pth', map_location='cpu'))
+        self.dino_encoder.load_state_dict(torch.load('dinov2_vitb14_reg4_pretrain.pth', map_location='cpu'))
         self.dino_encoder.requires_grad_(False)
 
         dino_dim = 768

@@ -37,8 +37,6 @@ import math
 
 from transformers import AutoTokenizer
 import sys
-sys.path.append("/cpfs01/user/chenjin/InternVL")
-sys.path.append("/cpfs01/user/chenjin/OmniEmbodiment")
 import prismatic.vla.datasets.pretrainAe_a2d_pretrain_v6 as a2d_cfg
 from prismatic.util.data_utils import PaddedCollatorForActionPrediction_Gensim
 
@@ -168,10 +166,10 @@ class Wrapped_Model(torch.nn.Module):
 @dataclass
 class FinetuneConfig:
     # fmt: off
-    vla_path: str = "/cpfs01/user/buqingwen/OmniEmbodiment/vla-scripts/calvin_log/dino-latent-action-pretrained-openvla-openx-10k+CALVIN_ABC+b16+lr-0.00035+lora-r32+dropout-0.0=w-LowLevelDecoder-ws-12-NewScheduler"                            # Path to OpenVLA model (on HuggingFace Hub)
-    lam_path: str = "/cpfs01/user/buqingwen/OmniEmbodiment/logs/ckpts_dino_lam_openx/epoch=0-step=190000.ckpt"
+    vla_path: str = "your vla path"                            # Path to OpenVLA model (on HuggingFace Hub)
+    lam_path: str = "your lam path"
     # Directory Paths
-    data_root_dir: Path = Path("/cpfs01/user/buqingwen/LIBERO/modified_libero_rlds")        # Path to Open-X dataset directory
+    data_root_dir: Path = Path("your data root dir")        # Path to Open-X dataset directory
     dataset_name: str = "dustbin"                                # Name of fine-tuning dataset (e.g., `droid_wipe`)
     run_root_dir: Path = Path("runs")                               # Path to directory to store logs & checkpoints
     adapter_tmp_dir: Path = Path("adapter-tmp")                     # Temporary directory for LoRA weights before fusing
@@ -220,16 +218,6 @@ class FinetuneConfig:
 
 @draccus.wrap()
 def finetune(cfg: FinetuneConfig) -> None:
-
-    if cfg.debug:
-        import debugpy
-        try:
-            # 5678 is the default attach port in the VS Code debug configurations. Unless a host and port are specified, host defaults to 127.0.0.1
-            debugpy.listen(("localhost", 4499))
-            print("Waiting for debugger attach")
-            debugpy.wait_for_client()
-        except Exception as e:
-            pass
 
     print(f"Fine-tuning OpenVLA Model `{cfg.vla_path}` on `{cfg.dataset_name}`")
 
@@ -352,7 +340,7 @@ def finetune(cfg: FinetuneConfig) -> None:
     ActionSpacePadder = a2d_cfg.ActionSpacePadderArguments()
 
     text_tokenizer = AutoTokenizer.from_pretrained(
-        "/cpfs01/shared/opendrivelab/opendrivelab_hdd/chenjin/InternVL2-2B",
+        "InternVL2-2B",
         trust_remote_code=True,
         add_eos_token=False,
     )
@@ -384,7 +372,7 @@ def finetune(cfg: FinetuneConfig) -> None:
         use_real_state=True, 
         conversation_type=data_training_args.conversation_type, 
         vis_frame=False, 
-        vis_dir="/cpfs01/user/chenjin/OmniEmbodiment/a2d_img", 
+        vis_dir="", 
         ActionSpacePadder=ActionSpacePadder, 
         min_window_size=cfg.window_size, 
         max_window_size=cfg.window_size + 1, 
