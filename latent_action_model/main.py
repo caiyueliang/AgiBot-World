@@ -1,12 +1,9 @@
 from lightning.pytorch.cli import LightningCLI
-
-from genie.dataset import LightningPlatformer2D
-from genie.dataset_openx import LightningOpenX, LightningOpenX_MultiView
-
-from genie.model import Genie, DINO_LAM
+from genie.dataset import LightningOpenX
+from genie.model import DINO_LAM
 
 cli = LightningCLI(
-    Genie,
+    DINO_LAM,
     LightningOpenX,
     seed_everything_default=42,
 )
