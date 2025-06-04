@@ -22,7 +22,6 @@ pip install torch torchvision
 
 # Clone our repo and pip install to download dependencies
 git clone -b Manipulation-Challenge https://github.com/OpenDriveLab/AgiBot-World.git
-cd univla
 pip install -e .
 
 # Install Flash Attention 2 for training (https://github.com/Dao-AILab/flash-attention)
