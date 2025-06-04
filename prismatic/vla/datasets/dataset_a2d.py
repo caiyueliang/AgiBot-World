@@ -1,6 +1,9 @@
+import os
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent.parent.parent / "InternVL"))
 import copy
 import json
-import os
 import re
 import random
 import time
@@ -21,9 +24,6 @@ logging.set_verbosity_info()
 
 import argparse
 from transformers import AutoTokenizer
-import sys
-sys.path.append("/root/workspace/main/InternVL")
-sys.path.append("/root/workspace/main/univla")
 import prismatic.vla.datasets.pretrainAe_a2d_pretrain_v6 as cfg 
 from prismatic.vla.datasets.dataset_transforms import PipelineComposer
 from internvl_chat.internvl.train.constants import (
@@ -37,10 +37,7 @@ from internvl_chat.internvl.train.constants import (
     REF_END_TOKEN,
     REF_START_TOKEN,
 )
-from internvl_chat.internvl.train.dataset import build_transform, dynamic_preprocess, preprocess_internlm
-# from internvl_chat.tools.vis_frame import vis_frame_func
-# from internvl_chat.tools.make_video import generate_videos
-# from internvl_chat.internvl.patch import concat_pad_data_collator_pi0
+from internvl_chat.internvl.train.dataset import build_transform, dynamic_preprocess
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 logger = logging.get_logger("transformers.dataset_jaka" + __name__)
@@ -109,7 +106,6 @@ def timer(vis=True):
         return inner
 
     return time_it
-
 
 class MetaDataset(Dataset):
     def __init__(
@@ -196,7 +192,6 @@ class BaseDataset(MetaDataset):
         statistic=False,
         debug_one_episode=False,
     ):
-        # import ipdb;ipdb.set_trace()
         self.dataset_cfg = dataset_cfg
         self.task_episode_processors = PipelineComposer(task_episode_processors_cfg)
         self.task_dataset_processors = PipelineComposer(task_dataset_processors_cfg)
@@ -297,7 +292,6 @@ class BaseDataset(MetaDataset):
             meta_info_path = os.path.join(episode_info["episode_dir"], "meta_info.json")
             with open(meta_info_path, "r", encoding="utf-8") as file:
                 meta_info = json.load(file)
-            # meta_text = json.loads(meta_info["text"])["extra"]
             meta_text = json.loads(meta_info["text"])["description"]
 
             def extract_items_from_text(text):
@@ -316,31 +310,6 @@ class BaseDataset(MetaDataset):
                 cleaned_matches = [match.replace('\\"', '"') for match in matches]
                 return cleaned_matches
 
-        #     items = []
-        #     # 解析 extra 列表中的每一项
-        #     for item in meta_text:
-        #         extracted_items = extract_items_from_text(item)
-        #         # print(f"从 '{item}' 中提取的内容: {extracted_items}")
-        #         items.extend(extracted_items)
-        #     unique_items = list(dict.fromkeys(items))
-        #     assert len(unique_items) == 2
-
-        #     if "裤" in unique_items[1]:
-        #         assert "房间" in unique_items[0]
-        #         unique_items = [unique_items[1], unique_items[0]]
-        #     else:
-        #         assert "裤" in unique_items[0]
-        #         assert "房间" in unique_items[1]
-
-        #     unique_items = [item.replace("的", "") for item in unique_items]
-        #     data.append(unique_items)
-
-        # df = pd.DataFrame(data, columns=["Clothing Type", "House Type"])
-
-        # # 统计每个房屋类型中每种衣服类型的数量
-        # stats = df.groupby(["House Type", "Clothing Type"]).size().unstack(fill_value=0)
-
-        # logger.info(stats)
         return
 
     @timer()
@@ -499,19 +468,27 @@ class A2dDataset(BaseDataset):
                     images += image
                     num_tiles.append(len(image))
                 else:
-                    # images.append(raw_target[cam_key])
-                    # num_tiles.append(1)
                     if "hist" in cam_key:
                         ret[cam_key[:10]+"pixel_values"] = self.image_transform_lam(self.resize_img(raw_target[cam_key]))
                     else:
-                        ret[cam_key[:5]+"pixel_values"] = self.image_transform_lam(self.resize_img(raw_target[cam_key]))
-                        ret["pixel_values"] = self.image_transform(raw_target[cam_key])
-                        
+                        if "init" in cam_key:
+                            if "head" in cam_key:
+                                ret["head_pixel_values"] = self.image_transform(raw_target[cam_key])
+                                ret[cam_key[:5]+"pixel_values"] = self.image_transform_lam(self.resize_img(raw_target[cam_key]))   
+                            if "left" in cam_key:
+                                ret["left_hand_pixel_values"] = self.image_transform(raw_target[cam_key])
+                            if "right" in cam_key:
+                                ret["right_hand_pixel_values"] = self.image_transform(raw_target[cam_key])                 
+                        else:
+                            ret[cam_key[:5]+"pixel_values"] = self.image_transform_lam(self.resize_img(raw_target[cam_key]))   
+                                     
+        ret["all_pixel_values"] = torch.cat((ret["head_pixel_values"], ret["left_hand_pixel_values"], ret["right_hand_pixel_values"]), dim=0)
+        ret["pixel_values"] = ret["head_pixel_values"]
+        
         return ret
     
 
     def __getitem__(self, idx):
-
         get_data_done = False
         while not get_data_done:
             try:
@@ -519,16 +496,14 @@ class A2dDataset(BaseDataset):
                 window_size = raw_target["window_size"]
 
                 action, action_mask = self.ActionSpacePadder.get_action(raw_target["action_target"], chunk_size=30)
-
-                # TODO(hxd): state_mask is different from action with no end_effector, should use two mask instead of only one.
-                # left_gripper_joint_positions = raw_target["agent_state"].pop("left_gripper_joint_positions")
-                # right_gripper_joint_positions = raw_target["agent_state"].pop("right_gripper_joint_positions")
                 state, state_mask = self.ActionSpacePadder.get_action(raw_target["agent_state"], chunk_size=1)
 
                 results = self.multi_image_get_item(
                     raw_target, 
                     cam_keys=[
                         "init_cam_tensor_head_color", 
+                        "init_cam_tensor_hand_right_color", 
+                        "init_cam_tensor_hand_left_color", 
                         "goal_cam_tensor_head_color", 
                         "hist_init_cam_tensor_head_color", 
                         "hist_goal_cam_tensor_head_color", 
@@ -540,9 +515,8 @@ class A2dDataset(BaseDataset):
                     agent_state = -1 * torch.ones_like(agent_state)
                 results.update(
                     {
-                        # "action_gts": torch.tensor(action, dtype=torch.float32),
                         "actions": torch.tensor(action, dtype=torch.float32),
-                        "actions_mask": None,  # torch.tensor(action_mask, dtype=torch.float32),
+                        "actions_mask": None,
                         "proprio": agent_state,
                         "ctrl_freqs": torch.tensor([freq], dtype=torch.float32),
                         "window_size": window_size,
@@ -553,19 +527,6 @@ class A2dDataset(BaseDataset):
             except Exception as error:
                 logger.error(f"process dataset idx: {idx}, {self.data[idx]['episode_dir']}, error info: {error}")
                 idx = random.randint(0, len(self.data) - 1)
-
-        # if self.vis_frame:
-        #     vis_frame_func(
-        #         raw_target,
-        #         results,
-        #         action,
-        #         state,
-        #         self.vis_dir,
-        #         self.normalize_type,
-        #         left_gripper_joint_positions,
-        #         right_gripper_joint_positions,
-        #         self.ActionSpacePadder.action_space,
-        #     )
 
         return results
 
@@ -596,73 +557,18 @@ def setup_distributed():
     return local_rank, world_size
 
 
-def visualize_14d_histograms(arrays, bins=1000, total="all", save_root=None):
-    """
-    Visualize histograms for each dimension of [T, 7] arrays.
-
-    Parameters:
-        arrays (list of np.ndarray): List of [T, 7] arrays. Arrays can have varying T.
-        bins (int): Number of bins for histogram (if fine_grained is False).
-    """
-    import matplotlib.pyplot as plt
-    import numpy as np
-
-    data = np.vstack(arrays).reshape(-1, 14)
-
-    # Create a single figure with 7 subplots
-    fig, axes = plt.subplots(7, 2, figsize=(10, 20), sharex=False)
-    fig.tight_layout(pad=4.0)
-
-    for dim in range(14):
-        row = dim % 7  # 当前图所在的行
-        col = dim // 7  # 当前图所在的列
-        ax = axes[row, col]  # 获取对应子图
-
-        # Extract the dimension's data
-        dim_data = data[:, dim]
-
-        # Use histogram binning
-        ax.hist(dim_data, bins=bins, edgecolor="black", alpha=0.7)
-        # ax.set_xlabel(f"Channel {dim}")
-        # ax.set_ylabel("Count")
-        # ax.set_title(f"Histogram for Dimension {dim+1}")
-
-        # Set grid
-        ax.grid(True, linestyle="--", alpha=0.7)
-        if dim < 7:
-            ax.set_title(f"Left {dim}")
-        else:
-            ax.set_title(f"Right {dim - 7}")
-    plt.tight_layout()
-    # plt.show()
-    save_root = "/mnt/user/codes/my_tools" if not save_root else save_root
-    os.makedirs(save_root, exist_ok=True)
-    save_path = f"{save_root}/visualize_xindong-delta_eef-{str(total)}.png"
-    plt.savefig(save_path)
-    print(f"Save {total} data into {save_path}")
-
-
 if __name__ == "__main__":
-
-    import debugpy
-    try:
-        # 5678 is the default attach port in the VS Code debug configurations. Unless a host and port are specified, host defaults to 127.0.0.1
-        debugpy.listen(("localhost", 4399))
-        print("Waiting for debugger attach")
-        debugpy.wait_for_client()
-    except Exception as e:
-        pass
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", action="store_true", help="Whether using debug mode to dump data into pickle")
     parser.add_argument("--vis_frame", action="store_true", help="Whether visualizing image")
-    parser.add_argument("--vis_dir", type=str, default="/mnt/user/Data/Images", help="The dictionary to save images")
-    parser.add_argument("--video_dir", type=str, default="/mnt/user/Data/Videos", help="The dictionary to save videos")
+    parser.add_argument("--vis_dir", type=str, default="Data/Images", help="The dictionary to save images")
+    parser.add_argument("--video_dir", type=str, default="Data/Videos", help="The dictionary to save videos")
     parser.add_argument("--statistic", action="store_true", help="Whether to statistic data")
 
     args = parser.parse_args()
     text_tokenizer = AutoTokenizer.from_pretrained(
-        "/cpfs01/shared/opendrivelab/opendrivelab_hdd/chenjin/InternVL2-2B",
+        "InternVL2-2B",
         trust_remote_code=True,
         add_eos_token=False,
     )
@@ -684,7 +590,6 @@ if __name__ == "__main__":
     setup_distributed()
     dataset_args = cfg.DatasetArguments()
     data_training_args = cfg.DataTrainingArguments(force_image_size=224)
-    # training_args = cfg.AlphaTrainingArguments()
     ActionSpacePadder = cfg.ActionSpacePadderArguments()
 
     args.debug = False
@@ -738,8 +643,6 @@ if __name__ == "__main__":
         ds,
         batch_size=1, 
         num_workers=12, 
-        # batch_size=training_args.per_device_eval_batch_size,
-        # num_workers=training_args.dataloader_num_workers,
         shuffle=True,
         collate_fn=concat_pad_data_collator_pi0,
     )
@@ -747,13 +650,3 @@ if __name__ == "__main__":
     for batch_data in tqdm(dataloader):
         data = batch_data
         print(len(batch_data))
-
-        if False:
-            visualized_tensor.append(batch_data["action_gts"].cpu().numpy())
-            total = len(visualized_tensor)
-            if total % 100 == 0:
-                save_root = "/cpfs01/user/chenjin/OmniEmbodiment/vis_results"
-                visualize_14d_histograms(visualized_tensor, bins=1000, total=total, save_root=save_root)
-
-    # if args.vis_frame:
-    #     generate_videos(args.vis_dir, args.video_dir)

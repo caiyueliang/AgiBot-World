@@ -21,7 +21,7 @@ conda activate univla
 pip install torch torchvision
 
 # Clone our repo and pip install to download dependencies
-git clone https://github.com/OpenDriveLab/UniVLA.git
+git clone -b Manipulation-Challenge https://github.com/OpenDriveLab/AgiBot-World.git
 cd univla
 pip install -e .
 
@@ -54,35 +54,36 @@ pip install "flash-attn==2.5.5" --no-build-isolation
 
 ```bash
 # Start training with 8 GPUs
-torchrun --standalone --nnodes 1 --nproc-per-node 8 finetune_genie.py \
-                                 --dataset_name "genie" \
-                                 --run_root_dir "genie_log" \
+torchrun \
+--standalone \
+--nnodes 1 \
+--nproc-per-node 8 \
+scripts/finetune_genie.py \
+--vla_path checkpoints/finetuned \
+--lam_path checkpoints/lam-stage-2.ckpt \
+--data_root_dir genie_dataset/dustbin\
+--codebook_size 16 \
+--batch_size 8 \
+--grad_accumulation_steps 1 \
+--max_steps 5000 \
+--save_steps 1000 \
+--run_root_dir output/dustbin \
+--adapter_tmp_dir output/dustbin \
 ```
 
 Once you finished training and get the action decoder and VLA backbone, you can simply start the evaluation with:
 
 ## Evaluation
 ```bash
-# Start evaluation on Genie Sim Benchmark
-# [Optional] Install Genie Sim dependencies
-pip install -r experiments/robot/genie/genie_requirements.txt
-
-# By default, we test for 50 rollouts every task, totalling 500 independent trials.
-python experiments/robot/genie/run_genie_eval_decoder.py \
-    --task_suite_name dustbin \
-    --action_decoder_path /path/to/your/action_decoder_path.pt \
-    --pretrained_checkpoint /path/to/your/finetuned_univla \
-    --save_video False    # Whether to save rollout videos \
-    --seed 7
+omni_python scripts/infer.py
 ```
-
-> To be updated.
+> In the inference process, we use ROS2 to achieve data communication between the model and the <td><a href="https://github.com/AgibotTech/genie_sim">Genie Sim Benchmark</a></td> simulation environment. The interface is to be updated.
 
 ## :pushpin: TODO list
--  [ ] Minimal version of training code for AgibotWorld dataset and pretrained weights.
--  [ ] Minimal version of training code for the challenge's dataset. (available once the challenge dataset is ready).
--  [ ] Evaluation script.
--  [ ] Submission instructions.
+-  [x] Training code and dataloader for challenge dataset.
+-  [x] Evaluation code.
+-  [ ] Finetuned checkpoints on challenge dataset.
+-  [ ] Updated simulation environment.
 
 ## :pencil: Citation
 If you find our code or models useful in your work, please cite [our paper](https://arxiv.org/pdf/2505.06111):

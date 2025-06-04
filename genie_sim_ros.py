@@ -5,19 +5,14 @@ from rclpy.qos import (
     QoSDurabilityPolicy,
 )
 from rclpy.node import Node
-from rclpy.parameter import Parameter
 
-from builtin_interfaces.msg import Time
-from sensor_msgs.msg import Image, CompressedImage
-from sensor_msgs.msg import JointState
+from sensor_msgs.msg import (
+    CompressedImage,
+    JointState,
+)
 
-from collections import deque
 import threading
 
-import cv2
-from cv_bridge import CvBridge
-from rosbags.image import message_to_cvimage
-import numpy as np
 
 QOS_PROFILE_LATEST = QoSProfile(
     history=QoSHistoryPolicy.KEEP_LAST,
@@ -29,24 +24,18 @@ QOS_PROFILE_LATEST = QoSProfile(
 
 class SimROSNode(Node):
     def __init__(self, robot_cfg=None, node_name="univla_node"):
-        super().__init__(
-            node_name,
-            # parameter_overrides=[Parameter("use_sim_time", Parameter.Type.BOOL, True)],
-        )
+        super().__init__(node_name,)
 
-        # core
-        # self.robot_cfg = robot_cfg
-        # self.init_pose = None
-        # self.bridge = CvBridge()
-
-        # pub
+        self.robot_cfg = robot_cfg
+        
+        # publish
         self.pub_joint_command = self.create_publisher(
             JointState,
             "/joint_command",
             QOS_PROFILE_LATEST,
         )
 
-        # sub
+        # subscribe
         self.sub_img_head = self.create_subscription(
             CompressedImage,
             "/sim/head_img",
@@ -56,10 +45,6 @@ class SimROSNode(Node):
 
         # msg
         self.lock = threading.Lock()
-        # self.message_buffer = deque(maxlen=30)
-        # self.lock_joint_state = threading.Lock()
-        # self.obs_joint_state = JointState()
-        # self.cur_joint_state = JointState()
 
         # loop
         self.loop_rate = self.create_rate(30.0)
@@ -79,7 +64,6 @@ class SimROSNode(Node):
     def publish_joint_command(self, action):
         
         cmd_msg = JointState()
-        # cmd_msg.header = msg.header
         cmd_msg.name = [
             "idx21_arm_l_joint1",
             "idx22_arm_l_joint2",

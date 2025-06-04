@@ -1,21 +1,24 @@
 import os
 import sys
-sys.path.append("/home/zy/workspace/main/univla")
-from dataclasses import dataclass
 from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
+
+from dataclasses import dataclass
 from typing import Union
-import draccus
-import torch
-import torch.distributed as dist
+
 import cv2
-import torch.distributed as dist
 import numpy as np
-# Sane Defaults
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-import sys
-sys.path.append("/home/zy/workspace/main/InternVL")
-sys.path.append("/home/zy/workspace/main/univla")
+
+import draccus
 from experiments.robot.geniesim.genie_model import WrappedGenieEvaluation, WrappedModel
+
+import rclpy
+import time
+from cv_bridge import CvBridge
+
+from genie_sim_ros import SimROSNode
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 def resize_img(img, width, height):
@@ -25,14 +28,6 @@ def resize_img(img, width, height):
 
 
 def infer(policy):
-    
-    ########
-    import rclpy
-    import threading, time
-    
-    from cv_bridge import CvBridge
-
-    from univla.genie_sim_ros import SimROSNode
 
     rclpy.init()
     sim_ros_node = SimROSNode()
@@ -62,7 +57,7 @@ def infer(policy):
 class GenerateConfig:
 
     model_family: str = "openvla"                    # Model family
-    pretrained_checkpoint: Union[str, Path] = "/home/zy/workspace/main/univla/checkpoints/run-best-v1"
+    pretrained_checkpoint: Union[str, Path] = "checkpoints/finetuned"
     load_in_8bit: bool = False                       # (For OpenVLA only) Load with 8-bit quantization
     load_in_4bit: bool = False                       # (For OpenVLA only) Load with 4-bit quantization
                   
@@ -70,7 +65,7 @@ class GenerateConfig:
     local_log_dir: str = "./experiments/eval_logs"   # Local directory for eval logs
     seed: int = 7  
 
-    action_decoder_path:str = "/home/zy/workspace/main/univla/checkpoints/run-best-v1/action_decoder.pt"
+    action_decoder_path:str = "checkpoints/finetuned/action_decoder.pt"
     window_size: int = 30
     
     n_layers: int = 2

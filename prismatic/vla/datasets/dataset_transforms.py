@@ -1,25 +1,22 @@
-# Audit Json File
-
-
 import json
 import logging
-import tqdm
+import os
 import random
 import multiprocessing
-import os
-from typing import Optional
+
 import imgaug.augmenters as iaa
-
 import numpy as np
-
-np.bool = np.bool_
-import h5py
 from PIL import Image
-# from internvl_chat.agibot.a2d.a2d_description import A2dJoint2Eef
+import h5py
+import tqdm
+
 from torchvision import transforms as tv_transforms
 
-VIS = False
+np.bool = np.bool_
+
 logger = logging.getLogger(__name__)
+
+VIS = False
 
 
 class EpisodeProcessorLoad:
@@ -234,7 +231,7 @@ class DatasetTargetDualArmChunk:
         self,
         action_chunk_size=30,
         action_shift=1,
-        action_use_delta=True,
+        action_use_delta=False,
         delta_type: str = "chunk",
         gripper_use_delta=False,
         mp_cnt=1,
@@ -313,6 +310,9 @@ class DatasetTargetDualArmChunk:
                     for i in range(self.action_chunk_size):
                         shift_idx = current_idx + self.action_shift * (i + 1)
                         base_idx = current_idx if self.delta_type == "chunk" else shift_idx - self.action_shift
+
+                        # self.action_use_delta = True
+
                         left_arm_joint_chunk.append(
                             self.get_target_action(
                                 state, base_idx, shift_idx, "left_arm_abs_joint", self.action_use_delta

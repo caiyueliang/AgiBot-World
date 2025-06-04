@@ -1,14 +1,12 @@
+import rclpy
 import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
+from genie_sim_ros import SimROSNode
 
 
 def set_zero():
     
-    ########
-    import rclpy
-    import time
-    
-    from univla.genie_sim_ros import SimROSNode
-
     rclpy.init()
     sim_ros_node = SimROSNode()
 

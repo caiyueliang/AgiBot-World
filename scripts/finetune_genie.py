@@ -1,8 +1,10 @@
 import os
 import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
+
 from collections import deque
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Optional
 
 import draccus
@@ -13,32 +15,30 @@ from torch.nn.utils.rnn import pad_sequence
 import tqdm
 from accelerate import PartialState, Accelerator
 from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
-from torch.nn.parallel import DistributedDataParallel as DDP
+from accelerate import DistributedDataParallelKwargs
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
-from transformers import AutoModelForVision2Seq, AutoProcessor, BitsAndBytesConfig
-from transformers import AutoConfig, AutoImageProcessor
+from transformers import (
+    AutoModelForVision2Seq, 
+    AutoProcessor, 
+    BitsAndBytesConfig, 
+    AutoConfig, 
+    AutoImageProcessor,
+    AutoTokenizer,
+)
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
 import wandb
-from prismatic.models.backbones.llm.prompting import PurePromptBuilder
-from prismatic.vla.action_tokenizer import ActionTokenizer
-from prismatic.vla.datasets.rlds.utils.data_utils import save_dataset_statistics
 
+from prismatic.models.backbones.llm.prompting import PurePromptBuilder
 from prismatic.extern.hf.configuration_prismatic import OpenVLAConfig
 from prismatic.extern.hf.modeling_prismatic import OpenVLAForActionPrediction
 from prismatic.extern.hf.processing_prismatic import PrismaticImageProcessor, PrismaticProcessor
-
-# Sane Defaults
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
 from prismatic.models.policy.transformer_utils import MAPBlock
-import math
-
-from transformers import AutoTokenizer
-import sys
-import prismatic.vla.datasets.pretrainAe_a2d_pretrain_v6 as a2d_cfg
 from prismatic.util.data_utils import PaddedCollatorForActionPrediction_Gensim
+import prismatic.vla.datasets.pretrainAe_a2d_pretrain_v6 as a2d_cfg
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 def positionalencoding1d(d_model, length):
@@ -68,8 +68,13 @@ class ActionDecoder(torch.nn.Module):
         n_joints=16,
         window_size=30,
         hidden_dim=512,
+        with_proprio=False,
         ):
         super().__init__()
+        
+        if with_proprio:
+            self.proprio_proj = nn.Linear(n_joints, hidden_dim)
+        
         self.latent_action_pool = MAPBlock(
             n_layers=n_layers,
             vis_dim=vis_dim,
@@ -82,18 +87,26 @@ class ActionDecoder(torch.nn.Module):
             embed_dim=hidden_dim,
             n_heads=hidden_dim//64,
             )
-
+        
         self.proj = nn.Sequential(
-                                nn.Linear(hidden_dim, n_joints * window_size),
-                                # nn.Tanh(), # for gripper joint range from -1 to 1
-                    )
+            nn.Linear(hidden_dim * 2, hidden_dim * 8), 
+            nn.GELU(),
+            nn.Linear(hidden_dim * 8, n_joints * window_size),
+        )
+        
 
-    def forward(self, latent_action_tokens, visual_embed):
+    def forward(self, latent_action_tokens, visual_embed, proprio=None):
+            
         visual_embed = self.visual_pool(visual_embed)
         latent_action_tokens = latent_action_tokens[:, -4:]
-        action_token = self.latent_action_pool(latent_action_tokens, init_embed = visual_embed)
+        action_token = self.latent_action_pool(latent_action_tokens, init_embed=visual_embed)
         
-        action = self.proj(action_token)
+        if proprio is not None:
+            proprio = proprio.squeeze(1)
+            proprio = self.proprio_proj(proprio)
+            action = self.proj(torch.cat((action_token, proprio), dim=1))
+        else:
+            action = self.proj(action_token)
 
         return action
     
@@ -106,6 +119,7 @@ class Wrapped_Model(torch.nn.Module):
         window_size=30,
         decoder_n_layers=1,
         decoder_hidden_dim=512,
+        with_proprio=False,
         ):
         super().__init__()
         self.vla = vla
@@ -113,9 +127,11 @@ class Wrapped_Model(torch.nn.Module):
         self.action_decoder = ActionDecoder(
             n_layers=decoder_n_layers,
             hidden_dim=decoder_hidden_dim,
+            with_proprio=with_proprio,
             )
 
         self.decoupled_loss = False
+        self.with_proprio = with_proprio
         if freeze_vla:
             self.vla.requires_grad_(False)
             
@@ -153,7 +169,12 @@ class Wrapped_Model(torch.nn.Module):
         latent_action_tokens = torch.stack(latent_action_tokens).to(torch.float)
 
         # Run specialist policy
-        pred_action = self.action_decoder(latent_action_tokens, visual_embed).reshape(-1, self.window_size, 16)
+        if self.with_proprio:
+            proprio = batch['proprio']
+        else:
+            proprio = None
+            
+        pred_action = self.action_decoder(latent_action_tokens, visual_embed, proprio).reshape(-1, self.window_size, 16)
 
         loss = torch.nn.functional.l1_loss(pred_action, batch['actions'], reduction='none')
         loss_one_step = loss[:,0].mean()
@@ -166,11 +187,11 @@ class Wrapped_Model(torch.nn.Module):
 @dataclass
 class FinetuneConfig:
     # fmt: off
-    vla_path: str = "your vla path"                            # Path to OpenVLA model (on HuggingFace Hub)
-    lam_path: str = "your lam path"
+    vla_path: str = "checkpoints/finetuned"                         # Path to univla model ckpt
+    lam_path: str = ""
     # Directory Paths
-    data_root_dir: Path = Path("your data root dir")        # Path to Open-X dataset directory
-    dataset_name: str = "dustbin"                                # Name of fine-tuning dataset (e.g., `droid_wipe`)
+    data_root_dir: str = "checkpoints/lam-stage-2.ckpt"                                         # Path to dataset
+    dataset_name: str = "genie_dataset/dustbin"                                   # Name of fine-tuning dataset
     run_root_dir: Path = Path("runs")                               # Path to directory to store logs & checkpoints
     adapter_tmp_dir: Path = Path("adapter-tmp")                     # Temporary directory for LoRA weights before fusing
 
@@ -183,10 +204,10 @@ class FinetuneConfig:
     image_aug: bool = False                                         # Whether to train with image augmentations
     shuffle_buffer_size: int = 100_00                               # Dataloader shuffle buffer size (can reduce if OOM)
     save_latest_checkpoint_only: bool = True                        # Whether to save only one checkpoint per run and
-                                                                    #   continually overwrite the latest checkpoint
-                                                                    #   (If False, saves all checkpoints)
+                                                                    # continually overwrite the latest checkpoint
+                                                                    # (If False, saves all checkpoints)
     # LAM setting
-    codebook_size: int = 32
+    codebook_size: int = 16
     lam_model_dim: int = 768
     lam_latent_dim: int = 128
     lam_num_latents: int = 32
@@ -195,6 +216,7 @@ class FinetuneConfig:
     lam_dec_blocks: int = 12
     lam_num_heads: int = 12
     window_size: int = 30
+    lam_loss_weight: float = 1
         
     freeze_vla: bool = False
     # LoRA Arguments
@@ -205,8 +227,8 @@ class FinetuneConfig:
                                                                     #   => CAUTION: Reduces memory but hurts performance
 
     # Tracking Parameters
-    wandb_project: str = "univla-geniesim"                      # Name of W&B project to log to (use default!)
-    wandb_entity: str = "nsabsw"                          # Name of entity to log under
+    wandb_project: str = "univla-geniesim"                          # Name of W&B project to log to (use default!)
+    wandb_entity: str = ""                                          # Name of entity to log under
     run_id_note: Optional[str] = None     
     
     debug: bool = False
@@ -214,10 +236,22 @@ class FinetuneConfig:
     # Decoder
     decoder_n_layers: int = 1
     decoder_hidden_dim: int = 512
+    
+    with_proprio: bool = False
 
 
 @draccus.wrap()
 def finetune(cfg: FinetuneConfig) -> None:
+
+    if cfg.debug:
+        import debugpy
+        try:
+            # 5678 is the default attach port in the VS Code debug configurations. Unless a host and port are specified, host defaults to 127.0.0.1
+            debugpy.listen(("localhost", 4499))
+            print("Waiting for debugger attach")
+            debugpy.wait_for_client()
+        except Exception as e:
+            pass
 
     print(f"Fine-tuning OpenVLA Model `{cfg.vla_path}` on `{cfg.dataset_name}`")
 
@@ -227,29 +261,11 @@ def finetune(cfg: FinetuneConfig) -> None:
     torch.cuda.set_device(device_id := distributed_state.local_process_index)
     torch.cuda.empty_cache()
 
-    from accelerate import DistributedDataParallelKwargs
-
     ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
     accelerator = Accelerator(mixed_precision="bf16", kwargs_handlers=[ddp_kwargs])
 
-    # Configure Unique Experiment ID & Log Directory
-    exp_id = (
-        f"{cfg.vla_path.split('/')[-1]}+{cfg.dataset_name}"
-        f"+b{cfg.batch_size * cfg.grad_accumulation_steps}"
-        f"+lr-{cfg.learning_rate}"
-    )
-    if cfg.use_lora:
-        exp_id += f"+lora-r{cfg.lora_rank}+dropout-{cfg.lora_dropout}"
-    if cfg.use_quantization:
-        exp_id += "+q-4bit"
-    if cfg.run_id_note is not None:
-        exp_id += f"--{cfg.run_id_note}"
-    if cfg.image_aug:
-        exp_id += "--image_aug"
-
-    exp_id += f'=w-LowLevelDecoder-ws-{cfg.window_size}-wHist-predActOnly'
     # Start =>> Build Directories
-    run_dir, adapter_dir = cfg.run_root_dir / exp_id, cfg.adapter_tmp_dir / exp_id
+    run_dir, adapter_dir = cfg.run_root_dir, cfg.adapter_tmp_dir
     os.makedirs(run_dir, exist_ok=True)
 
     # Quantization Config =>> only if LoRA fine-tuning
@@ -301,6 +317,7 @@ def finetune(cfg: FinetuneConfig) -> None:
         window_size=cfg.window_size,
         decoder_n_layers=cfg.decoder_n_layers,
         decoder_hidden_dim=cfg.decoder_hidden_dim,
+        with_proprio=cfg.with_proprio,
         ).to(device_id)
 
     trainable_total_params = sum(p.numel() for p in dual_system.parameters() if p.requires_grad)
@@ -335,7 +352,10 @@ def finetune(cfg: FinetuneConfig) -> None:
     
     # Load gensim dataset
     from prismatic.vla.datasets import A2dDataset
-    dataset_args = a2d_cfg.DatasetArguments()
+    dataset_args = a2d_cfg.DatasetArguments(
+        meta_json_dir=cfg.data_root_dir,
+        data_root_dir=cfg.data_root_dir,
+    )
     data_training_args = a2d_cfg.DataTrainingArguments(force_image_size=224)
     ActionSpacePadder = a2d_cfg.ActionSpacePadderArguments()
 
@@ -389,9 +409,6 @@ def finetune(cfg: FinetuneConfig) -> None:
         debug_one_episode=False,
     )
 
-    # Save Dataset Statistics =>> used to de-normalize actions for inference!
-    # if distributed_state.is_main_process:
-    #     save_dataset_statistics(vla_dataset.dataset_statistics, run_dir)
     collator = PaddedCollatorForActionPrediction_Gensim()
     dataloader = DataLoader(
         vla_dataset,
@@ -400,8 +417,7 @@ def finetune(cfg: FinetuneConfig) -> None:
         shuffle=True,
         collate_fn=collator,
         pin_memory=False,
-        num_workers=64,  # Important =>> Set to 0 if using RLDS; TFDS rolls its own parallelism!
-        # worker_init_fn=vla_dataset.init_action_tokenizer,
+        num_workers=64,
     )
     
     dual_system, latent_action_model, optimizer, scheduler, dataloader = accelerator.prepare(
@@ -409,8 +425,8 @@ def finetune(cfg: FinetuneConfig) -> None:
     )
 
     # Initialize Logging =>> W&B
-    if distributed_state.is_main_process:
-        wandb.init(entity=cfg.wandb_entity, project=cfg.wandb_project, name=f"ft+{exp_id}")
+    if distributed_state.is_main_process and not cfg.debug:
+        wandb.init(entity=cfg.wandb_entity, project=cfg.wandb_project)
 
     # Deque to store recent train metrics (used for computing smoothened metrics for gradient accumulation)
     recent_losses = deque(maxlen=cfg.grad_accumulation_steps)
@@ -426,9 +442,6 @@ def finetune(cfg: FinetuneConfig) -> None:
             progress.set_description("Epoch " + str(e+1))
 
             for batch_idx, batch in enumerate(dataloader):
-                # batch["input_ids"] = batch["input_ids"].to(device_id)
-                # batch["attention_mask"] = batch["attention_mask"].to(device_id)
-                # batch["labels"] = batch["labels"].to(device_id)
                 batch["init_pixel_values"] = batch["init_pixel_values"].to(device_id) # [8, 3, 224, 224]
                 batch["goal_pixel_values"] = batch["goal_pixel_values"].to(device_id) # [8, 3, 224, 224]
                 batch["pixel_values"] = batch["pixel_values"].to(torch.bfloat16).to(device_id) # [8, 6, 224, 224]
@@ -448,7 +461,6 @@ def finetune(cfg: FinetuneConfig) -> None:
                     input_ids_list = []
                     labels_list = []
                     hist_idx = 0
-                    # print(batch['with_hist'],latent_action_idx_history.shape)
                     
                     if batch['actions'].shape[0] == 1:
                         latent_action_idx_batch = latent_action_idx_batch.unsqueeze(0)
@@ -549,13 +561,7 @@ def finetune(cfg: FinetuneConfig) -> None:
                 batch["labels"] = labels
 
                 output, act_loss, loss_one_step, latent_action_proj = dual_system(batch)
-
-                # latent_align_loss = torch.nn.functional.mse_loss(latent_action_proj, latent_action_codes, reduction='none')
-                # latent_align_loss = latent_align_loss.sum(dim=1).mean() # Sum over the action sequence dim
-
-                loss = act_loss if cfg.freeze_vla else act_loss + output.loss
-                # loss += latent_align_loss
-                # Normalize loss to account for gradient accumulation
+                loss = act_loss if cfg.freeze_vla else act_loss + (output.loss) * cfg.lam_loss_weight
                 normalized_loss = loss / cfg.grad_accumulation_steps
 
                 torch.nn.utils.clip_grad_norm_(dual_system.parameters(), max_norm=0.3)
@@ -587,7 +593,7 @@ def finetune(cfg: FinetuneConfig) -> None:
                 smoothened_action_accuracy = sum(recent_action_accuracies) / len(recent_action_accuracies)
 
                 # Push Metrics to W&B (every 10 gradient steps)
-                if distributed_state.is_main_process and gradient_step_idx % 5 == 0:
+                if distributed_state.is_main_process and gradient_step_idx % 5 == 0 and not cfg.debug:
                     
                     wandb.log(
                         {
@@ -645,9 +651,6 @@ def finetune(cfg: FinetuneConfig) -> None:
                                 # Prepare to save checkpoint in new directory
                                 checkpoint_dir = Path(str(run_dir) + f"--{gradient_step_idx}_ckpt")
                                 os.makedirs(checkpoint_dir, exist_ok=True)
-
-                                # Save dataset statistics to new directory
-                                save_dataset_statistics(vla_dataset.dataset_statistics, checkpoint_dir)
 
                                 # Save processor and model weights to new directory
                                 processor.save_pretrained(checkpoint_dir)

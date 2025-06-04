@@ -34,8 +34,13 @@ class ActionDecoder(torch.nn.Module):
         n_joints=16,
         window_size=30,
         hidden_dim=512,
+        with_proprio=False,
         ):
         super().__init__()
+        
+        if with_proprio:
+            self.proprio_proj = nn.Linear(n_joints, hidden_dim)
+        
         self.latent_action_pool = MAPBlock(
             n_layers=n_layers,
             vis_dim=vis_dim,
@@ -48,17 +53,22 @@ class ActionDecoder(torch.nn.Module):
             embed_dim=hidden_dim,
             n_heads=hidden_dim//64,
             )
-
+        
         self.proj = nn.Sequential(
                                 nn.Linear(hidden_dim, n_joints * window_size),
                                 # nn.Tanh(), # for gripper joint range from -1 to 1
                     )
-        
-    def forward(self, latent_action_tokens, visual_embed):
-        visual_embed = self.visual_pool(visual_embed)
-        latent_action_tokens = latent_action_tokens[:, -4:]
-        action_token = self.latent_action_pool(latent_action_tokens, init_embed = visual_embed)
 
+    def forward(self, latent_action_tokens, visual_embed, proprio=None):
+        
+        if proprio is not None:
+            proprio = proprio.squeeze(1)
+            proprio = self.proprio_proj(proprio)
+            
+        visual_embed = self.visual_pool(visual_embed, init_embed=proprio)
+        latent_action_tokens = latent_action_tokens[:, -4:]
+        action_token = self.latent_action_pool(latent_action_tokens, init_embed=visual_embed)
+        
         action = self.proj(action_token)
 
         return action
@@ -72,6 +82,7 @@ class ActionDecoderWrapper(nn.Module):
         hidden_dim=512,
         n_joints=16,
         balancing_factor=0.01,
+        with_proprio=False,
         ):
         super().__init__()
         self.net = ActionDecoder(
@@ -79,8 +90,10 @@ class ActionDecoderWrapper(nn.Module):
             window_size=window_size,
             hidden_dim=hidden_dim,
             n_joints=n_joints,
+            with_proprio=with_proprio,
             )
         
+        self.with_proprio = with_proprio
         self.n_joints = n_joints
         self.temporal_size = window_size
         self.temporal_mask = torch.flip(torch.triu(torch.ones(self.temporal_size, self.temporal_size, dtype=torch.bool)), dims=[1]).numpy()
@@ -97,9 +110,16 @@ class ActionDecoderWrapper(nn.Module):
         self.action_buffer_mask = np.zeros((self.temporal_mask.shape[0], self.temporal_mask.shape[0]), dtype=np.bool_)
 
     
-    def forward(self, latent_actions, visual_embed, proprio):
+    def forward(self, latent_actions, visual_embed, proprio=None):
+        
+        # Run specialist policy
+        if self.with_proprio:
+            proprio = proprio.to(torch.float)
+        else:
+            proprio = None
+        
         # Forward action decoder
-        pred_action = self.net(latent_actions.to(torch.float), visual_embed.to(torch.float)).reshape(-1, self.temporal_size, self.n_joints)
+        pred_action = self.net(latent_actions.to(torch.float), visual_embed.to(torch.float), proprio).reshape(-1, self.temporal_size, self.n_joints)
         pred_action = np.array(pred_action.tolist())
         
         # Shift action buffer
@@ -142,6 +162,7 @@ class WrappedModel(torch.nn.Module):
             n_layers=cfg.n_layers,
             hidden_dim=cfg.hidden_dim,
             balancing_factor=cfg.balancing_factor,
+            with_proprio=cfg.with_proprio,
             )
         
         self.action_decoder.net.load_state_dict(torch.load(cfg.action_decoder_path))
