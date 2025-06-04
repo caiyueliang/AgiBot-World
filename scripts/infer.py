@@ -72,6 +72,7 @@ class GenerateConfig:
     hidden_dim: int = 1024
     balancing_factor: float = 0.01                     # larger for smoother
 
+    with_proprio: bool = False
     debug: bool = False
 
 
