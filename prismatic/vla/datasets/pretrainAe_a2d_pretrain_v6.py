@@ -208,7 +208,7 @@ class DatasetArguments(BaseDatasetArguments):
 
 @dataclass
 class ModelArguments(BaseModelArguments):
-    model_name_or_path: str = field(default="/mnt/public/user/code/pi0/InternVL2-2B-actExpertActDim14")
+    model_name_or_path: str = field(default="")
     drop_path_rate: float = field(default=0.1)
     freeze_llm: bool = field(default=True)
     freeze_backbone: bool = field(default=True)
