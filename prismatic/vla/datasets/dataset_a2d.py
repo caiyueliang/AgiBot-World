@@ -19,13 +19,13 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 from transformers.trainer_pt_utils import LabelSmoother
 from transformers.utils import logging
-
 logging.set_verbosity_info()
 
 import argparse
 from transformers import AutoTokenizer
 import prismatic.vla.datasets.pretrainAe_a2d_pretrain_v6 as cfg 
 from prismatic.vla.datasets.dataset_transforms import PipelineComposer
+from prismatic.vla.datasets.dataset_transforms import build_latent_image_transform
 from internvl_chat.internvl.train.constants import (
     BOX_END_TOKEN,
     BOX_START_TOKEN,
@@ -106,6 +106,7 @@ def timer(vis=True):
         return inner
 
     return time_it
+
 
 class MetaDataset(Dataset):
     def __init__(
@@ -531,6 +532,65 @@ class A2dDataset(BaseDataset):
         return results
 
 
+class LAMStage1Dataset(BaseDataset):
+    def __init__(self, is_train=True, image_size=448, pad2square=False, normalize_type="imagenet", **kwargs):
+        super().__init__(**kwargs)
+
+        self.image_size = image_size
+        self.is_train = is_train
+        self.pad2square = pad2square
+        self.normalize_type = normalize_type
+
+    def get_transform(self):
+        # Build transformation function
+        transform = build_transform(
+            is_train=self.is_train,
+            input_size=self.image_size,
+            pad2square=self.pad2square,
+            normalize_type=self.normalize_type,
+        )
+        return transform
+
+    def multi_image_get_item(self, raw_target: Dict[str, Any]):
+        img = raw_target["cam_tensor_head_color"]
+        img_k = raw_target["cam_tensor_head_color_target"]
+        initial_pixel_values = build_latent_image_transform()(img)
+        target_pixel_values = build_latent_image_transform()(img_k)
+        initial_pixel_values = torch.from_numpy(np.array(initial_pixel_values).astype(np.float32) / 255.0).permute(
+            2, 0, 1
+        )
+        target_pixel_values = torch.from_numpy(np.array(target_pixel_values).astype(np.float32) / 255.0).permute(
+            2, 0, 1
+        )
+        video = torch.stack([initial_pixel_values, target_pixel_values], dim=0).unsqueeze(0)
+
+        # Create the final return dictionary
+        ret = dict(video=video)
+        return ret
+
+    def __getitem__(self, idx):
+        get_data_done = False
+        while not get_data_done:
+            try:
+                raw_target = super().__getitem__(idx)
+                results = {}
+                freq = int(raw_target["used_cam_cfg"]["head"]["camera_fps"])
+
+                results.update(
+                    {
+                        "random_video_len": raw_target["random_video_len"],
+                        "videos": raw_target["videos"],
+                        "ctrl_freqs": torch.tensor([freq], dtype=torch.float32),
+                    }
+                )
+                get_data_done = True
+            except Exception as error:
+                logger.error(f"process dataset idx: {idx}, {self.data[idx]['episode_dir']}, error info: {error}")
+                idx = random.randint(0, len(self.data) - 1)
+
+        return results
+    
+    
 def setup_distributed():
     """Initialize distributed training environment"""
     if "RANK" not in os.environ:

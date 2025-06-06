@@ -3,20 +3,28 @@ import logging
 import os
 import random
 import multiprocessing
-
+import torchvision.transforms as T
 import imgaug.augmenters as iaa
 import numpy as np
 from PIL import Image
 import h5py
 import tqdm
-
+import torch
 from torchvision import transforms as tv_transforms
-
 np.bool = np.bool_
-
 logger = logging.getLogger(__name__)
-
 VIS = False
+
+
+def build_latent_image_transform():
+
+    latent_transform = T.Compose(
+        [
+            T.Lambda(lambda img: img.convert("RGB") if img.mode != "RGB" else img),
+            T.Resize((224, 224)),
+        ]
+    )
+    return latent_transform
 
 
 class EpisodeProcessorLoad:
@@ -33,8 +41,14 @@ class EpisodeProcessorLoad:
         with h5py.File(state_path, "r") as fid:
             all_abs_joint = np.array(fid["state/joint/position"], dtype=np.float32)
 
-            # TODO(hxd): adapt to dex_hand
-            all_abs_gripper = np.array(fid[f"{self.gripper_source}/effector/position"], dtype=np.float32)
+            if "effector" in fid[f"{self.gripper_source}"]:
+                all_abs_gripper = np.array(fid[f"{self.gripper_source}/effector/position"], dtype=np.float32)
+            else:
+                left_abs_gripper = np.array(fid[f"{self.gripper_source}/left_effector/position"], dtype=np.float32)
+                right_abs_gripper = np.array(fid[f"{self.gripper_source}/right_effector/position"], dtype=np.float32)
+                left_abs_gripper = np.expand_dims(left_abs_gripper, axis=-1)
+                right_abs_gripper = np.expand_dims(right_abs_gripper, axis=-1)
+                all_abs_gripper = np.concatenate((left_abs_gripper, right_abs_gripper), axis=-1)
 
             # all_abs_head: [N * [head-yaw, head-pitch]]
             all_abs_head = np.array(fid["state/head/position"], dtype=np.float32)
@@ -226,6 +240,46 @@ class EpisodeProcessorNormalizeGripperValue:
         return episode_info
 
 
+class EpisodeProcessorLoadOnlyImage:
+    def __init__(self):
+        self.cam_path_suffix = "_color.jpg"
+        self.joint_dof = 7
+        self.gripper_dof = 1
+
+    def __call__(self, episode_info):
+
+        meta_path = os.path.join(episode_info["episode_dir"], "meta_info.json")
+        with open(meta_path, "r") as fid:
+            meta_info = json.load(fid)
+
+        cam_cfg = {}
+        camera_list = meta_info.pop("camera_list")
+        camera_type = meta_info.pop("camera_type")
+        camera_fps = meta_info.pop("camera_fps")
+        sensor_type = meta_info.pop("sensor_type")
+        for idx, cam_name in enumerate(camera_list):
+            """
+            Due to the cloud update of the camera name in the camera_list of meta_info.json, this
+            modification was made to be compatible with both 'head' and 'head_color' fields.
+            """
+            if cam_name == "head_color":
+                cam_name = "head"
+            cam_cfg[cam_name] = {
+                "camera_type": camera_type[idx],
+                "sensor_type": sensor_type[idx],
+                "camera_fps": camera_fps[idx],
+                "camera_file_name": f"{cam_name}{self.cam_path_suffix}",
+            }
+        meta_info["cam_cfg"] = cam_cfg
+        episode_info["meta_info"] = meta_info
+        meta_version = meta_info["version"]
+        # GCENT upload v0.0.1 version data
+        # assert (
+        #     meta_version >= "v0.0.2"
+        # ), "don't use v0.0.1 data, due to the gripper value means action instead of state."
+        return episode_info
+
+
 class DatasetTargetDualArmChunk:
     def __init__(
         self,
@@ -381,7 +435,8 @@ class DatasetTargetDualArmChunk:
                         "detailed_job_description": detailed_job_description,
                         "action_target": action_target,
                         "agent_state": agent_state,
-                        "ee_type": meta_info["ee_type"],
+                        "ee_type": meta_info["ee_type"] if "ee_type" in meta_info else None,
+                        "ee_list": meta_info["ee_list"] if "ee_list" in meta_info else None,
                         "window_size": window_size,
                     }
 
@@ -408,6 +463,98 @@ class DatasetTargetDualArmChunk:
                     if item is not None:
                         reformat_data.extend(item)
 
+        inputs["iter_dataset"] = reformat_data
+        return inputs
+
+
+class DatasetTargetDualArmOnlyImage:
+    def __init__(
+        self,
+        action_chunk_size=30,
+        action_shift=1,
+        mp_cnt=1,
+        random_len=(15, 45),
+        # clip_len=1,
+    ):
+        self.action_chunk_size = action_chunk_size
+        self.action_shift = action_shift
+        self.mp_cnt = mp_cnt
+        # self.clip_len = clip_len
+        self.random_video_len = random_len
+
+    def _get_last_frame_idx(self, action_config):
+        max_frame_idx = 0
+        for step in action_config:
+            max_frame_idx = max(max_frame_idx, step["end_frame"])
+        return max_frame_idx
+
+    def mp_worker(self, info):
+        results = []
+        try:
+            meta_info = info["meta_info"]
+            task_specific_cfg = info["task_specific_cfg"]
+            action_config = info["label_info"]["action_config"]
+            step_num = len(action_config)
+            last_frame_idx = self._get_last_frame_idx(action_config)
+
+            for act_step in action_config:
+                start_idx = act_step["start_frame"]
+                stop_idx = act_step["end_frame"]
+                job_description = info["english_task_name"]
+                sub_job_description = act_step["english_action_text"]
+                vid_len = stop_idx - start_idx
+
+                if vid_len < self.random_video_len[1]:
+                    continue
+
+                random_length = random.randint(self.random_video_len[0], self.random_video_len[1])
+                # for j in range(0, vid_len-self.random_video_len[0], clip_len):
+                for j in range(0, vid_len - self.random_video_len[0]):
+                    start = j
+                    end = j + random_length
+                    if end > vid_len:
+                        end = vid_len
+                        start = max(vid_len - random_length, 0)
+
+                    used_cam_cfg = {}
+                    for cam_name in task_specific_cfg["use_cam_list"]:
+                        used_cam_cfg[cam_name] = meta_info["cam_cfg"][cam_name]
+
+                    model_target = {
+                        "task_id": f"{info['task_id']}",
+                        "job_id": f"{info['job_id']}",
+                        "sn_code": f"{info['sn_code']}",
+                        "episode_id": f"{info['episode_id']}",
+                        "episode_dir": info["episode_dir"],
+                        "frame_idx": f"{start}",
+                        "target_idx": f"{end}",
+                        "used_cam_cfg": used_cam_cfg,
+                        "job_description": job_description,
+                        "sub_job_description": sub_job_description,
+                        "random_video_len": random_length,
+                        "step_num": step_num,
+                    }
+
+                    results.append(model_target)
+        except Exception as error:
+            logger.error(f'{info["episode_dir"]} met error: {error}')
+            results = {}
+        return results
+
+    def __call__(self, inputs):
+        dataset = inputs["dataset"]
+        reformat_data = []
+        if self.mp_cnt <= 1:
+            for ep_info in tqdm.tqdm(dataset, desc="target_generate", mininterval=60):
+                model_targets = self.mp_worker(ep_info)
+                reformat_data.extend(model_targets)
+        else:
+            logger.info(f"[DatasetTargetDualArmChunk] use multiprocess={self.mp_cnt}")
+            with multiprocessing.Pool(processes=self.mp_cnt) as pool:
+                results_tmp = pool.map(self.mp_worker, dataset)
+                reformat_data = []
+                for item in results_tmp:
+                    reformat_data.extend(item)
         inputs["iter_dataset"] = reformat_data
         return inputs
 
@@ -604,6 +751,38 @@ class RuntimeImageAugRandomDropImage:
 
                 background_image = self.drop_image(img)
                 inputs[input_image] = Image.fromarray(background_image)
+        return inputs
+
+
+class RuntimeVideoPreprocessLoad:
+    def __init__(self):
+        # image shape: [C,H,W]
+        self.target_key = "cam_tensor_"
+        self.main_key = ["head_color"]
+
+    def __call__(self, inputs):
+        for cam_name, item in inputs["used_cam_cfg"].items():
+            name = item["camera_file_name"].split(".")[0]
+            if name in self.main_key:
+                cam_file_path = os.path.join(
+                    inputs["episode_dir"], "camera", inputs["frame_idx"], item["camera_file_name"]
+                )
+                img = Image.open(cam_file_path).convert("RGB")
+                cam_file_path = os.path.join(
+                    inputs["episode_dir"], "camera", inputs["target_idx"], item["camera_file_name"]
+                )
+                img_k = Image.open(cam_file_path).convert("RGB")
+                initial_pixel_values = build_latent_image_transform()(img)
+                target_pixel_values = build_latent_image_transform()(img_k)
+                initial_pixel_values = torch.from_numpy(
+                    np.array(initial_pixel_values).astype(np.float32) / 255.0
+                ).permute(2, 0, 1)
+                target_pixel_values = torch.from_numpy(
+                    np.array(target_pixel_values).astype(np.float32) / 255.0
+                ).permute(2, 0, 1)
+                video = torch.stack([initial_pixel_values, target_pixel_values], dim=0).unsqueeze(0)
+                inputs["videos"] = video
+
         return inputs
 
 
