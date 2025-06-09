@@ -59,8 +59,6 @@ class ActionDecoder(torch.nn.Module):
             nn.GELU(),
             nn.Linear(hidden_dim * 8, n_joints * window_size),
         )
-        self.wrist_l_proj = nn.Linear(2176, vis_dim)
-        self.wrist_r_proj = nn.Linear(2176, vis_dim)
 
     def forward(self, latent_action_tokens, visual_embed, proprio=None):
             
