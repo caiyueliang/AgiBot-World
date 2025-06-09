@@ -40,25 +40,32 @@ class ActionDecoder(torch.nn.Module):
         
         if with_proprio:
             self.proprio_proj = nn.Linear(n_joints, hidden_dim)
-        
+
         self.latent_action_pool = MAPBlock(
             n_layers=n_layers,
             vis_dim=vis_dim,
             embed_dim=hidden_dim,
             n_heads=hidden_dim//64,
             )
-        
+
         self.visual_pool = MAPBlock(
             vis_dim=vis_dim,
             embed_dim=hidden_dim,
             n_heads=hidden_dim//64,
             )
-        
-        self.proj = nn.Sequential(
-            nn.Linear(hidden_dim * 2, hidden_dim * 8), 
-            nn.GELU(),
-            nn.Linear(hidden_dim * 8, n_joints * window_size),
-        )
+
+        if with_proprio:
+            self.proj = nn.Sequential(
+                nn.Linear(hidden_dim * 2, hidden_dim * 8), 
+                nn.GELU(),
+                nn.Linear(hidden_dim * 8, n_joints * window_size),
+            )
+        else:
+            self.proj = nn.Sequential(
+                nn.Linear(hidden_dim, hidden_dim * 4), 
+                nn.GELU(),
+                nn.Linear(hidden_dim * 4, n_joints * window_size),
+            )
 
     def forward(self, latent_action_tokens, visual_embed, proprio=None):
             
