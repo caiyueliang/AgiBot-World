@@ -131,10 +131,12 @@ class Exp_DinoSigLIP_224px_OXE_Magic_Soup_Plus(Exp_SigLIP_224px_Bridge):
     # data_mix: str = "oxe_magic_soup_plus"
     data_mix: str = "omni_magic_soup_plus_plus"
 
-    expected_world_size: int = 32
-    global_batch_size: int = 1024
-    per_device_batch_size: int = 32
-
+    # expected_world_size: int = 1
+    # global_batch_size: int = 1
+    # per_device_batch_size: int = 1
+    expected_world_size: int = 8
+    global_batch_size: int = 64
+    per_device_batch_size: int = 8
 
 # === OpenVLA Fine-tuning Configurations ===
 

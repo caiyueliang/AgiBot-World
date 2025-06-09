@@ -60,7 +60,8 @@ def load(
         overwatch.info(f"Loading from local path `{(run_dir := Path(model_id_or_path))}`")
 
         # Get paths for `config.json` and pretrained checkpoint
-        config_json, checkpoint_pt = run_dir / "config.json", run_dir / "checkpoints" / "latest-checkpoint.pt"
+        config_json, checkpoint_pt = run_dir / "prism-dinosiglip-224px+7b_config.json", run_dir / "checkpoints" / "latest-checkpoint.pt"
+        
         assert config_json.exists(), f"Missing `config.json` for `{run_dir = }`"
         assert checkpoint_pt.exists(), f"Missing checkpoint for `{run_dir = }`"
     else:

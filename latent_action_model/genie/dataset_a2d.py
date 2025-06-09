@@ -3,16 +3,27 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from typing import Any, Callable
-import torch
-import torch.nn.functional as F
 from lightning import LightningDataModule
+import torch
+import torch.distributed as dist
+import torch.nn.functional as F
 from torch.utils.data import DataLoader, IterableDataset
 from torch.utils.data import get_worker_info
-import torchvision.transforms as transforms
-from dataclasses import dataclass
-
+import importlib
 from prismatic.util import set_global_seed
-from prismatic.util.data_utils import CollatorForLatentAction
+from prismatic.util.data_utils import data_collator_lam
+from prismatic.vla.datasets.dataset_a2d import LAMStage1Dataset
+from prismatic.vla.datasets.alpha_base_cfg import BaseDatasetArguments, BaseDataTrainingArguments
+from latent_action_model.genie.lam_dataset import LAMConcatDataset
+
+# Set constants for image processing
+from PIL import Image, ImageFile, PngImagePlugin
+IGNORE_INDEX = -100
+Image.MAX_IMAGE_PIXELS = None
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+MaximumDecompressedSize = 1024
+MegaByte = 2**20
+PngImagePlugin.MAX_TEXT_CHUNK = MaximumDecompressedSize * MegaByte
 
 
 def exists(var) -> bool:
@@ -37,6 +48,48 @@ def default_worker_init_fn(worker_id: int) -> None:
 
         dataset._start = glob_start + worker_id * per_worker
         dataset._end = min(dataset._start + per_worker, glob_end)
+    
+    
+def build_datasets(
+    dataset_args: BaseDatasetArguments,
+    data_training_args: BaseDataTrainingArguments,
+    is_train=True,
+    ):
+    dataset = LAMStage1Dataset(
+        # base params
+        label_file_dir=dataset_args.meta_json_dir,
+        data_root_dir=dataset_args.data_root_dir,
+        valid_episode_txt=dataset_args.valid_episode_txt,
+        world_size=dist.get_world_size(),
+        rank_id=dist.get_rank(),
+        online_process_mp_cnt=dataset_args.online_process_mp_cnt,
+        # a2d params
+        is_train=is_train,
+        image_size=data_training_args.force_image_size,
+        pad2square=data_training_args.pad2square,
+        normalize_type=data_training_args.normalize_type,
+    )
+
+    if is_train:
+        dataset.generate_task_infos(
+            dataset_cfg=dataset_args.dataset_task_cfg,
+            task_episode_processors_cfg=dataset_args.episode_processors,
+            task_dataset_processors_cfg=dataset_args.dataset_processors,
+            task_runtime_processors_cfg=dataset_args.runtime_processors,
+            shuffle=True,
+            debug_one_episode=False,
+            )
+    else:
+        dataset.generate_task_infos(
+            dataset_cfg=dataset_args.eval_dataset_task_cfg,
+            task_episode_processors_cfg=dataset_args.eval_episode_processors,
+            task_dataset_processors_cfg=dataset_args.eval_dataset_processors,
+            task_runtime_processors_cfg=dataset_args.eval_runtime_processors,
+            shuffle=True,
+            debug_one_episode=False,
+            )
+        
+    return dataset
 
 
 class LightningDataset(LightningDataModule):
@@ -65,7 +118,7 @@ class LightningDataset(LightningDataModule):
 
         val_batch_size = default(val_batch_size, batch_size)
 
-        self.num_workers = 0    # For RLDS parallelism
+        self.num_workers = 24    # For RLDS parallelism
         self.batch_size = batch_size
         self.val_batch_size = val_batch_size
 
@@ -125,37 +178,7 @@ class LightningDataset(LightningDataModule):
         )
 
 
-
-from PIL import Image
-import random
-
-@dataclass
-class random_crop_resize():
-    def __init__(
-        self,
-        target_size=224
-    ):
-        self.target_size = target_size
-        self.to_tensor = transforms.ToTensor()
-    
-    def __call__(self, image):
-        width, height = image.size
-
-        if width < height:
-            crop_size = width
-        else:
-            crop_size = height
-
-        left = random.randint(0, width - crop_size)
-        top = random.randint(0, height - crop_size)
-
-        image_cropped = image.crop((left, top, left + crop_size, top + crop_size))
-        image_resized = image_cropped.resize((self.target_size, self.target_size), Image.BILINEAR)
-        image_resized = self.to_tensor(image_resized)
-        
-        return image_resized
-    
-class LightningOpenX(LightningDataset):
+class LightningA2D(LightningDataset):
     """
     This dataset samples video recorded using a random agent
     playing the gym environments defined in the Procgen Benchmark,
@@ -174,7 +197,7 @@ class LightningOpenX(LightningDataset):
             image_aug:bool = False,
             **kwargs
     ) -> None:
-        super(LightningOpenX, self).__init__(**kwargs)
+        super(LightningA2D, self).__init__(**kwargs)
 
         self.data_root_dir = data_root
         self.data_mix = data_mix
@@ -187,51 +210,47 @@ class LightningOpenX(LightningDataset):
         self.shuffle_buffer_size = shuffle_buffer_size
         self.image_aug = image_aug
 
-        self.num_workers = 0    # Important =>> Set to 0 if using RLDS; TFDS rolls its own parallelism!
+        self.num_workers = 24    # Important =>> Set to 0 if using RLDS; TFDS rolls its own parallelism!
         self.worker_init_fn = set_global_seed(42, get_worker_init_fn=True)
 
-        # self.batch_transform = RLDSBatchTransformVideo(
-        #     image_transform=transforms.ToTensor() 
-        # )
-        self.collate_fn = CollatorForLatentAction()
+        self.collate_fn = data_collator_lam()
 
         self.save_hyperparameters()
+        
+        # Dataset initialization for train and eval
+        self.all_train_datasets = []
+        self.all_eval_datasets = []
+
+        all_cfgs = []
+        cfg_paths = ["/mnt/chenjin/AgiBot-World/latent_action_model/config/lam-a2d.py"]
+        for cfg_path in cfg_paths:
+            file_path = Path(cfg_path)
+            sys.path.insert(0, str(file_path.parent))
+            cfg = importlib.import_module(file_path.stem)
+            all_cfgs.append(cfg)
+            
+        for data_cfg in all_cfgs:
+            self.all_train_datasets.append(
+                build_datasets(
+                    dataset_args=data_cfg.DatasetArguments(),
+                    data_training_args=data_cfg.DataTrainingArguments(),
+                    is_train=True,
+                )
+            )
+            self.all_eval_datasets.append(
+                build_datasets(
+                    dataset_args=data_cfg.DatasetArguments(),
+                    data_training_args=data_cfg.DataTrainingArguments(),
+                    is_train=False,
+                )
+            )
 
     def setup(self, stage: str) -> None:
-        pass
-        # cls = RLDSDataset if not self.episodic else EpisodicRLDSDataset
-        # if stage == "fit":
-        #     self.train_dataset = cls(
-        #         self.data_root_dir,
-        #         self.data_mix,
-        #         self.batch_transform,
-        #         resize_resolution=self.resolution,
-        #         shuffle_buffer_size=self.shuffle_buffer_size,
-        #         train=True,
-        #         image_aug=self.image_aug,
-        #         training_phase='lam',
-        #     )
-        #     self.val_dataset = cls(
-        #         self.data_root_dir,
-        #         self.data_mix,
-        #         self.batch_transform,
-        #         resize_resolution=self.resolution,
-        #         shuffle_buffer_size=self.shuffle_buffer_size,
-        #         train=False,
-        #         image_aug=False,
-        #         training_phase='lam',
-        #     )
-        # elif stage == "test":
-        #     self.test_dataset = cls(
-        #         self.data_root_dir,
-        #         self.data_mix,
-        #         self.batch_transform,
-        #         resize_resolution=self.resolution,
-        #         shuffle_buffer_size=self.shuffle_buffer_size,
-        #         train=True,
-        #         image_aug=False,
-        #         training_phase='lam',
-        #     )
-        # else:
-        #     raise ValueError(f"Invalid stage: {stage}")
-        
+        if stage == "fit":
+            self.train_dataset = LAMConcatDataset(self.all_train_datasets)
+            self.val_dataset = LAMConcatDataset(self.all_eval_datasets)
+            
+        elif stage == "test":
+            self.test_dataset = LAMConcatDataset(self.all_eval_datasets)
+        else:
+            raise ValueError(f"Invalid stage: {stage}")

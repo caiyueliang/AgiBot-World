@@ -6,7 +6,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from collections import deque
 from dataclasses import dataclass
 from typing import Optional
-
+from torch.utils.tensorboard import SummaryWriter
 import draccus
 import torch
 import torch.nn as nn
@@ -94,10 +94,10 @@ class ActionDecoder(torch.nn.Module):
             nn.Linear(hidden_dim * 8, n_joints * window_size),
         )
         
-
     def forward(self, latent_action_tokens, visual_embed, proprio=None):
-            
+        
         visual_embed = self.visual_pool(visual_embed)
+        
         latent_action_tokens = latent_action_tokens[:, -4:]
         action_token = self.latent_action_pool(latent_action_tokens, init_embed=visual_embed)
         
@@ -157,8 +157,9 @@ class Wrapped_Model(torch.nn.Module):
 
     def fast_forward(self, batch, slow_output):
         # Task and action latents
-        visual_embed = slow_output.hidden_states[-1][:, : self.vla.vision_backbone.featurizer.patch_embed.num_patches ].to(torch.float)
-        latent_tokens = slow_output.hidden_states[-1][:, self.vla.vision_backbone.featurizer.patch_embed.num_patches : ]
+        visual_embed = slow_output.hidden_states[-1][:, : self.vla.vision_backbone.featurizer.patch_embed.num_patches*3].to(torch.float)
+
+        latent_tokens = slow_output.hidden_states[-1][:, self.vla.vision_backbone.featurizer.patch_embed.num_patches*3 : ]
         action_gt = batch["labels"].to(latent_tokens.device)
         mask = action_gt > 32000
 
@@ -191,6 +192,7 @@ class FinetuneConfig:
     lam_path: str = ""
     # Directory Paths
     data_root_dir: str = "checkpoints/lam-stage-2.ckpt"                                         # Path to dataset
+    meta_json_dir: str = ""  
     dataset_name: str = "genie_dataset/dustbin"                                   # Name of fine-tuning dataset
     run_root_dir: Path = Path("runs")                               # Path to directory to store logs & checkpoints
     adapter_tmp_dir: Path = Path("adapter-tmp")                     # Temporary directory for LoRA weights before fusing
@@ -242,16 +244,6 @@ class FinetuneConfig:
 
 @draccus.wrap()
 def finetune(cfg: FinetuneConfig) -> None:
-
-    if cfg.debug:
-        import debugpy
-        try:
-            # 5678 is the default attach port in the VS Code debug configurations. Unless a host and port are specified, host defaults to 127.0.0.1
-            debugpy.listen(("localhost", 4499))
-            print("Waiting for debugger attach")
-            debugpy.wait_for_client()
-        except Exception as e:
-            pass
 
     print(f"Fine-tuning OpenVLA Model `{cfg.vla_path}` on `{cfg.dataset_name}`")
 
@@ -353,7 +345,7 @@ def finetune(cfg: FinetuneConfig) -> None:
     # Load gensim dataset
     from prismatic.vla.datasets import A2dDataset
     dataset_args = a2d_cfg.DatasetArguments(
-        meta_json_dir=cfg.data_root_dir,
+        meta_json_dir=cfg.meta_json_dir,
         data_root_dir=cfg.data_root_dir,
     )
     data_training_args = a2d_cfg.DataTrainingArguments(force_image_size=224)
@@ -406,7 +398,8 @@ def finetune(cfg: FinetuneConfig) -> None:
         task_runtime_processors_cfg=dataset_args.runtime_processors,
         shuffle=True,
         statistic=True,
-        debug_one_episode=False,
+        debug_one_episode=cfg.debug,
+        # debug_one_episode=False,
     )
 
     collator = PaddedCollatorForActionPrediction_Gensim()
@@ -438,9 +431,13 @@ def finetune(cfg: FinetuneConfig) -> None:
         dual_system.train()
         optimizer.zero_grad()
         current_step = 0
+        if distributed_state.is_main_process:
+            # 创建一个 SummaryWriter 实例
+            writer = SummaryWriter(log_dir=cfg.run_root_dir)
+                
         for e in range(10000):
             progress.set_description("Epoch " + str(e+1))
-
+                
             for batch_idx, batch in enumerate(dataloader):
                 batch["init_pixel_values"] = batch["init_pixel_values"].to(device_id) # [8, 3, 224, 224]
                 batch["goal_pixel_values"] = batch["goal_pixel_values"].to(device_id) # [8, 3, 224, 224]
@@ -569,7 +566,7 @@ def finetune(cfg: FinetuneConfig) -> None:
                 normalized_loss.backward()
 
                 # Compute Accuracy and L1 Loss for Logging
-                action_logits = output.logits[:, dual_system.module.vla.vision_backbone.featurizer.patch_embed.num_patches : -1]
+                action_logits = output.logits[:, dual_system.module.vla.vision_backbone.featurizer.patch_embed.num_patches*3 : -1]
                 action_preds = action_logits.argmax(dim=2)
                 action_gt = batch["labels"][:, 1:].to(action_preds.device)
                 mask = action_gt > 32000
@@ -593,20 +590,30 @@ def finetune(cfg: FinetuneConfig) -> None:
                 smoothened_action_accuracy = sum(recent_action_accuracies) / len(recent_action_accuracies)
 
                 # Push Metrics to W&B (every 10 gradient steps)
-                if distributed_state.is_main_process and gradient_step_idx % 5 == 0 and not cfg.debug:
+                # if distributed_state.is_main_process and gradient_step_idx % 5 == 0 and not cfg.debug:
                     
-                    wandb.log(
-                        {
-                            "train_loss": smoothened_loss,
-                            "latent_action_accuracy": smoothened_action_accuracy,
-                            "action_loss": act_loss.item(),
-                            "action_loss_1step": loss_one_step.item(),
-                            "lr": optimizer.state_dict()['param_groups'][0]['lr']
-                            # "latent_align_loss": latent_align_loss.item(),
-                        },
-                        step=gradient_step_idx + current_step,
-                    )
+                #     wandb.log(
+                #         {
+                #             "train_loss": smoothened_loss,
+                #             "latent_action_accuracy": smoothened_action_accuracy,
+                #             "action_loss": act_loss.item(),
+                #             "action_loss_1step": loss_one_step.item(),
+                #             "lr": optimizer.state_dict()['param_groups'][0]['lr']
+                #             # "latent_align_loss": latent_align_loss.item(),
+                #         },
+                #         step=gradient_step_idx + current_step,
+                #     )
 
+                # Initialize Logging =>> TensorBoard
+                if distributed_state.is_main_process:
+                    # 使用 add_scalar 方法记录日志
+                    writer.add_scalar('train_loss', smoothened_loss, gradient_step_idx + current_step)
+                    writer.add_scalar('latent_action_accuracy', smoothened_action_accuracy, gradient_step_idx + current_step)
+                    writer.add_scalar('action_loss', act_loss.item(), gradient_step_idx + current_step)
+                    writer.add_scalar('action_loss_1step', loss_one_step.item(), gradient_step_idx + current_step)
+                    writer.add_scalar('lr', optimizer.state_dict()['param_groups'][0]['lr'], gradient_step_idx + current_step)
+                    # writer.add_scalar('latent_align_loss', latent_align_loss.item(), gradient_step_idx + current_step)
+                    
                 # Optimizer Step
                 if (batch_idx + 1) % cfg.grad_accumulation_steps == 0:
                     optimizer.step()
@@ -628,7 +635,7 @@ def finetune(cfg: FinetuneConfig) -> None:
                             dual_system.module.vla.save_pretrained(save_dir)
 
                         # Save low-level policy
-                        torch.save(dual_system.module.action_decoder.state_dict(), str(run_dir) + f'/action_decoder-{gradient_step_idx}.pt')
+                        torch.save(dual_system.module.action_decoder.state_dict(), str(run_dir) + f'/action_decoder.pt')
 
                     # Wait for processor and adapter weights to be saved by main process
                     dist.barrier()
@@ -666,7 +673,9 @@ def finetune(cfg: FinetuneConfig) -> None:
             if current_step >= cfg.max_steps:
                 print(f"Max step {cfg.max_steps} reached! Stopping training...")
                 break
-
+            
+        # 别忘了在适当的时候关闭 writer
+        writer.close()
 
 if __name__ == "__main__":
     finetune()

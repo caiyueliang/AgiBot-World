@@ -369,8 +369,11 @@ class PrismaticVLM(VLM):
             if isinstance(pixel_values, dict):
                 patch_features = self.vision_backbone({k: pixel_values[k][multimodal_indices] for k in pixel_values})
             else:
-                patch_features = self.vision_backbone(pixel_values[multimodal_indices])
-
+                patch_features_h = self.vision_backbone(pixel_values[multimodal_indices][:, :6, :, :])
+                patch_features_l = self.vision_backbone(pixel_values[multimodal_indices][:, 6:12, :, :])
+                patch_features_r = self.vision_backbone(pixel_values[multimodal_indices][:, 12:18, :, :])
+                patch_features = torch.concat((patch_features_h, patch_features_l, patch_features_r), dim=1)
+                
         # Projection Logic :: [bsz, num_patches, llm_embed_dim] =>> num_patches = (2 *) (256 + 1) for ViT-L + CLS
         projected_patch_embeddings = self.projector(patch_features)
         projected_patch_attention_mask = None

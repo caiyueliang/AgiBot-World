@@ -1,7 +1,7 @@
 # Manipulation Baseline
 We adopt [UniVLA](https://github.com/OpenDriveLab/UniVLA) as the baseline model for the [AgiBot World Challenge @ IROS 2025](https://agibot-world.com/challenge) - Manipulation track.
 
-This repo provides a minimal version of training codes.
+This repo provides a minimal version of training code.
 
 ## :video_game: Setup <a name="installation"></a>
 
@@ -15,14 +15,9 @@ conda activate univla
 2. Install dependencies.
 
 ```bash
-# Install pytorch
-# Look up https://pytorch.org/get-started/previous-versions/ with your cuda version for a correct command
-# Our experiments are conducted with 'torch 2.2.0 + cuda 12.1'
-pip install torch torchvision
-
 # Clone our repo and pip install to download dependencies
 git clone -b Manipulation-Challenge https://github.com/OpenDriveLab/AgiBot-World.git
-pip install -e .
+pip install -r requirements.txt
 
 # Install Flash Attention 2 for training (https://github.com/Dao-AILab/flash-attention)
 pip install packaging ninja

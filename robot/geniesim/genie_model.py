@@ -55,21 +55,26 @@ class ActionDecoder(torch.nn.Module):
             )
         
         self.proj = nn.Sequential(
-                                nn.Linear(hidden_dim, n_joints * window_size),
-                                # nn.Tanh(), # for gripper joint range from -1 to 1
-                    )
+            nn.Linear(hidden_dim * 2, hidden_dim * 8), 
+            nn.GELU(),
+            nn.Linear(hidden_dim * 8, n_joints * window_size),
+        )
+        self.wrist_l_proj = nn.Linear(2176, vis_dim)
+        self.wrist_r_proj = nn.Linear(2176, vis_dim)
 
     def forward(self, latent_action_tokens, visual_embed, proprio=None):
+            
+        visual_embed = self.visual_pool(visual_embed)
+        
+        latent_action_tokens = latent_action_tokens[:, -4:]
+        action_token = self.latent_action_pool(latent_action_tokens, init_embed=visual_embed)
         
         if proprio is not None:
             proprio = proprio.squeeze(1)
             proprio = self.proprio_proj(proprio)
-            
-        visual_embed = self.visual_pool(visual_embed, init_embed=proprio)
-        latent_action_tokens = latent_action_tokens[:, -4:]
-        action_token = self.latent_action_pool(latent_action_tokens, init_embed=visual_embed)
-        
-        action = self.proj(action_token)
+            action = self.proj(torch.cat((action_token, proprio), dim=1))
+        else:
+            action = self.proj(action_token)
 
         return action
 
@@ -192,7 +197,7 @@ class WrappedGenieEvaluation():
         self.prev_hist_action = ['']
 
 
-    def step(self, img, lang, proprio=np.zeros(16)):
+    def step(self, img_h, img_l, img_r, lang, proprio=np.zeros(16)):
         """
         Args:
             obs: environment observations
@@ -202,7 +207,9 @@ class WrappedGenieEvaluation():
         """
 
         observation = {
-            "full_image": img,
+            "img_h": img_h,
+            "img_l": img_l,
+            "img_r": img_r,
             "state": [],
         }
         
@@ -219,7 +226,7 @@ class WrappedGenieEvaluation():
             observation,
             lang,
             processor=self.processor,
-            hist_action='',
+            hist_action=self.prev_hist_action[-1],
         )
 
         latent_action_detokenize = [f'<ACT_{i}>' for i in range(32)]

@@ -187,7 +187,9 @@ class PrismaticProcessor(ProcessorMixin):
     def __call__(
         self,
         text: Union[TextInput, PreTokenizedInput, List[TextInput], List[PreTokenizedInput]],
-        images: Union[Image.Image, List[Image.Image]],
+        img_h: Union[Image.Image, List[Image.Image]],
+        img_l: Union[Image.Image, List[Image.Image]],
+        img_r: Union[Image.Image, List[Image.Image]],
         padding: Union[bool, str, PaddingStrategy] = False,
         truncation: Optional[Union[bool, str, TruncationStrategy]] = None,
         max_length: Optional[int] = None,
@@ -204,7 +206,10 @@ class PrismaticProcessor(ProcessorMixin):
         @param return_tensors: Type of return tensors (usually "pt" or TensorType.PYTORCH)
         @return: BatchFeature with keys for `input_ids`, `attention_mask` and `pixel_values`.
         """
-        pixel_values = self.image_processor(images, return_tensors=return_tensors)["pixel_values"]
+        pixel_values_h = self.image_processor(img_h, return_tensors=return_tensors)["pixel_values"]
+        pixel_values_l = self.image_processor(img_l, return_tensors=return_tensors)["pixel_values"]
+        pixel_values_r = self.image_processor(img_r, return_tensors=return_tensors)["pixel_values"]
+        pixel_values = torch.cat((pixel_values_h, pixel_values_l, pixel_values_r), dim=1)
         text_inputs = self.tokenizer(
             text, return_tensors=return_tensors, padding=padding, truncation=truncation, max_length=max_length
         )

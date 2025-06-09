@@ -2,11 +2,9 @@ import os
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
-sys.path.append(str(Path(__file__).parent.parent.parent.parent / "InternVL"))
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
-from typing import Optional, Union
+from typing import Union
 import draccus
 import torch
 import torch.distributed as dist
@@ -70,10 +68,20 @@ def calc_mse_for_single_trajectory(
     for step in tqdm.tqdm(range(steps)):
 
         data_point = dataset.__getitem__(step)
-        
-        image = Image.open(os.path.join(dataset.data[step]["episode_dir"], "camera", str(step), "head_color.jpg"))
+
+        # 打开图像文件
+        img_h = Image.open(os.path.join(dataset.data[step]["episode_dir"], "camera", str(step), "head_color.jpg"))
+        img_l = Image.open(os.path.join(dataset.data[step]["episode_dir"], "camera", str(step), "hand_left_color.jpg"))
+        img_r = Image.open(os.path.join(dataset.data[step]["episode_dir"], "camera", str(step), "hand_right_color.jpg"))
+
         lang = dataset.data[step]["detailed_job_description"]
-        image_array = np.array(image)
+
+        # lang = "Pick up the brown plum juice from the restock box with the right arm.;Place the brown plum juice on the shelf where the brown plum juice is located with the right arm."
+        
+        # 将图像转换为numpy数组
+        img_h = np.array(img_h)
+        img_l = np.array(img_l)
+        img_r = np.array(img_r)
 
         state = data_point["proprio"][0].numpy()
         gt_action = data_point["actions"][0].numpy()
@@ -81,11 +89,13 @@ def calc_mse_for_single_trajectory(
         state_joints_across_time.append(state)
         gt_action_joints_across_time.append(gt_action)
 
+        # import ipdb;ipdb.set_trace()
         if cfg.with_proprio:
-            action = policy.step(image_array, lang, state)
+            action = policy.step(img_h, img_l, img_r, lang, state)
         else:
-            action = policy.step(image_array, lang)
-
+            action = policy.step(img_h, img_l, img_r, lang)
+        
+        # import ipdb;ipdb.set_trace()
         concat_pred_action = action
         pred_action_joints_across_time.append(concat_pred_action)
 
@@ -116,7 +126,7 @@ def calc_mse_for_single_trajectory(
         )
 
         for i, ax in enumerate(axes):
-            # ax.plot(state_joints_across_time[:, i], label="state joints")
+            ax.plot(state_joints_across_time[:, i], label="state joints")
             ax.plot(gt_action_joints_across_time[:, i], label="gt action joints")
             ax.plot(pred_action_joints_across_time[:, i], label="pred action joints")
 
@@ -140,27 +150,27 @@ def calc_mse_for_single_trajectory(
 class GenerateConfig:
 
     model_family: str = "openvla"                    # Model family
-    pretrained_checkpoint: Union[str, Path] = "checkpoints/finetuned" 
+    pretrained_checkpoint: Union[str, Path] = f"rundir"
     load_in_8bit: bool = False                       # (For OpenVLA only) Load with 8-bit quantization
     load_in_4bit: bool = False                       # (For OpenVLA only) Load with 4-bit quantization
                   
-    center_crop: bool = False
-    local_log_dir: str = "./experiments/eval_logs"
+    center_crop: bool = False                        # Center crop? (if trained w/ random crop image aug)
+    local_log_dir: str = "./experiments/eval_logs"   # Local directory for eval logs
     seed: int = 7  
 
-    action_decoder_path:str = "checkpoints/finetuned/action_decoder.pt"
+    action_decoder_path:str = f"rundir/action_decoder.pt"
     window_size: int = 30
     
-    n_layers: int = 1
-    hidden_dim: int = 512
+    n_layers: int = 2
+    hidden_dim: int = 1024
     balancing_factor: float = 0.01                     # larger for smoother
     
-    data_root_dir: str = ""  
-    save_path: str = "openloop.png"
+    data_root_dir: str = "dataset/clean_desktop"  
+    save_path: str = f"openloop_results/output.png"
     
-    with_proprio: bool = False
+    with_proprio: bool = True
     
-    debug: bool = False
+    debug: bool = True
     
 
 @draccus.wrap()

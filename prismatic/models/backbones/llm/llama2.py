@@ -24,7 +24,7 @@ from prismatic.models.backbones.llm.prompting import (
 LLAMA2_MODELS = {
     # === Pure Meta LLaMa-2 (non-instruct/chat-tuned) Models ===
     "llama2-7b-pure": {
-        "llm_family": "llama2", "llm_cls": LlamaForCausalLM, "hf_hub_path": "/cpfs01/shared/opendrivelab/qwbu/llama2-7b-hf"
+        "llm_family": "llama2", "llm_cls": LlamaForCausalLM, "hf_hub_path": "/mnt/public/pretrained_models/llama2-7b-hf"
     },
 
     "llama2-13b-pure": {

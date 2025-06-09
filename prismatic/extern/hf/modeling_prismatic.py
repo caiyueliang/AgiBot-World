@@ -363,10 +363,19 @@ class PrismaticForConditionalGeneration(PrismaticPreTrainedModel):
             assert past_key_values is None, "Unexpected key `past_key_values` provided during language-only forward!"
 
             # Visual Feature Extraction
-            patch_features = self.vision_backbone(pixel_values)
+            pixel_values_h = pixel_values[:, :6, :, :]
+            pixel_values_l = pixel_values[:, 6:12, :, :]
+            pixel_values_r = pixel_values[:, 12:18, :, :]
+            
+            patch_features_h = self.vision_backbone(pixel_values_h)
+            patch_features_l = self.vision_backbone(pixel_values_l)
+            patch_features_r = self.vision_backbone(pixel_values_r)
+            
+            patch_features = torch.concat((patch_features_h, patch_features_l, patch_features_r), dim=1)
 
             # Projection Logic =>> Update Attention Mask
             projected_patch_embeddings = self.projector(patch_features)
+            
             projected_patch_attention_mask = None
             if attention_mask is not None:
                 projected_patch_attention_mask = torch.full(
@@ -436,7 +445,7 @@ class PrismaticForConditionalGeneration(PrismaticPreTrainedModel):
                 return *language_model_output, projected_patch_embeddings
 
             return language_model_output
-
+        
         return PrismaticCausalLMOutputWithPast(
             loss=language_model_output.loss,
             logits=language_model_output.logits,
@@ -444,7 +453,7 @@ class PrismaticForConditionalGeneration(PrismaticPreTrainedModel):
             hidden_states=language_model_output.hidden_states,
             attentions=language_model_output.attentions,
             projector_features=projected_patch_embeddings,
-        )
+        )       
 
     # === GenerationMixin Methods ===
     def prepare_inputs_for_generation(
@@ -553,8 +562,8 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
         
         last_hidden_states = [hidden_states[-1] for hidden_states in output.hidden_states]
         latent_tokens = torch.cat(last_hidden_states, dim=1)#[:, :-1]
-        visual_embed = latent_tokens[:,:256]
-        latent_tokens = latent_tokens[:, 256:]
+        visual_embed = latent_tokens[:,:256*3]
+        latent_tokens = latent_tokens[:, 256*3:]
 
         # print(generated_ids)
         latent_mask = generated_ids > 32000
@@ -564,7 +573,7 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
         latent_action = latent_tokens[:, -4:]
         generated_ids = generated_ids[:, 1:][:, latent_mask[0]]
         generated_ids = generated_ids[:, -4:]
-
+        
         return latent_action, visual_embed, generated_ids
 
 

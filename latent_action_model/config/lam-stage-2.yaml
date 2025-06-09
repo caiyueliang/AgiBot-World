@@ -34,13 +34,13 @@ data:
   image_aug: true
 
 trainer:
-  max_epochs: 20
+  max_epochs: 200
   accelerator: gpu
   num_nodes: 1
   devices: 8
   strategy: ddp_find_unused_parameters_false
   precision: 16-mixed
-  log_every_n_steps: 1000
+  log_every_n_steps: 10
   gradient_clip_val: 0.1
 
   callbacks:

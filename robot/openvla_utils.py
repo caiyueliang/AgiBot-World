@@ -42,7 +42,7 @@ def get_vla(cfg):
 
     vla = AutoModelForVision2Seq.from_pretrained(
         cfg.pretrained_checkpoint,
-        attn_implementation="flash_attention_2",
+        # attn_implementation="flash_attention_2",
         torch_dtype=torch.bfloat16,
         load_in_8bit=cfg.load_in_8bit,
         load_in_4bit=cfg.load_in_4bit,
@@ -166,8 +166,13 @@ def get_vla_action(vla, processor, base_vla_name, obs, task_label, unnorm_key, c
 
 def get_vla_latent_action(vla, processor, base_vla_name, obs, task_label, center_crop=False, hist_action=''):
     """Generates an action with the VLA policy."""
-    image = Image.fromarray(obs["full_image"])
-    image = image.convert("RGB")
+    img_h = Image.fromarray(obs["img_h"])
+    img_l = Image.fromarray(obs["img_l"])
+    img_r = Image.fromarray(obs["img_r"])
+    
+    img_h = img_h.convert("RGB")
+    img_l = img_l.convert("RGB")
+    img_r = img_r.convert("RGB")
 
     # (If trained with image augmentations) Center crop image and then resize back up to original size.
     # IMPORTANT: Let's say crop scale == 0.9. To get the new height and width (post-crop), multiply
@@ -177,23 +182,37 @@ def get_vla_latent_action(vla, processor, base_vla_name, obs, task_label, center
         crop_scale = 0.9
 
         # Convert to TF Tensor and record original data type (should be tf.uint8)
-        image = tf.convert_to_tensor(np.array(image))
-        orig_dtype = image.dtype
+        img_h = tf.convert_to_tensor(np.array(img_h))
+        img_l = tf.convert_to_tensor(np.array(img_l))
+        img_r = tf.convert_to_tensor(np.array(img_r))
+        orig_dtype = img_h.dtype
 
         # Convert to data type tf.float32 and values between [0,1]
-        image = tf.image.convert_image_dtype(image, tf.float32)
+        img_h = tf.image.convert_image_dtype(img_h, tf.float32)
+        img_l = tf.image.convert_image_dtype(img_l, tf.float32)
+        img_r = tf.image.convert_image_dtype(img_r, tf.float32)
 
         # Crop and then resize back to original size
-        image = crop_and_resize(image, crop_scale, batch_size)
+        img_h = crop_and_resize(img_h, crop_scale, batch_size)
+        img_l = crop_and_resize(img_l, crop_scale, batch_size)
+        img_r = crop_and_resize(img_r, crop_scale, batch_size)
 
         # Convert back to original data type
-        image = tf.clip_by_value(image, 0, 1)
-        image = tf.image.convert_image_dtype(image, orig_dtype, saturate=True)
-
+        img_h = tf.clip_by_value(img_h, 0, 1)
+        img_h = tf.image.convert_image_dtype(img_h, orig_dtype, saturate=True)
+        img_l = tf.clip_by_value(img_l, 0, 1)
+        img_l = tf.image.convert_image_dtype(img_l, orig_dtype, saturate=True)
+        img_r = tf.clip_by_value(img_r, 0, 1)
+        img_r = tf.image.convert_image_dtype(img_r, orig_dtype, saturate=True)
+        
         # Convert back to PIL Image
-        image = Image.fromarray(image.numpy())
-        image = image.convert("RGB")
-
+        img_h = Image.fromarray(img_h.numpy())
+        img_h = img_h.convert("RGB")
+        img_l = Image.fromarray(img_l.numpy())
+        img_l = img_l.convert("RGB")
+        img_r = Image.fromarray(img_r.numpy())
+        img_r = img_r.convert("RGB")
+        
     # Build VLA prompt
     if "openvla-v01" in base_vla_name:  # OpenVLA v0.1
         prompt = (
@@ -206,7 +225,7 @@ def get_vla_latent_action(vla, processor, base_vla_name, obs, task_label, center
         prompt = f"In: What action should the robot take to {task_label.lower()}? History action {hist_action}\nOut:"
 
     # Process inputs.
-    inputs = processor(prompt, image).to(vla.device, dtype=torch.bfloat16)
+    inputs = processor(prompt, img_h, img_l, img_r).to(vla.device, dtype=torch.bfloat16)
 
     # Get latent action.
     action = vla.predict_latent_action(**inputs, do_sample=True, temperature=0.75, top_p = 0.9)

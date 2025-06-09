@@ -483,8 +483,7 @@ class A2dDataset(BaseDataset):
                         else:
                             ret[cam_key[:5]+"pixel_values"] = self.image_transform_lam(self.resize_img(raw_target[cam_key]))   
                                      
-        ret["all_pixel_values"] = torch.cat((ret["head_pixel_values"], ret["left_hand_pixel_values"], ret["right_hand_pixel_values"]), dim=0)
-        ret["pixel_values"] = ret["head_pixel_values"]
+        ret["pixel_values"] = torch.cat((ret["head_pixel_values"], ret["left_hand_pixel_values"], ret["right_hand_pixel_values"]), dim=0)
         
         return ret
     
@@ -514,6 +513,7 @@ class A2dDataset(BaseDataset):
                 agent_state = torch.tensor(state, dtype=torch.float32)
                 if not self.use_real_state:
                     agent_state = -1 * torch.ones_like(agent_state)
+                
                 results.update(
                     {
                         "actions": torch.tensor(action, dtype=torch.float32),

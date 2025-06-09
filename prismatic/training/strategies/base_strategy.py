@@ -17,7 +17,7 @@ import torch.distributed as dist
 from torch.utils.data import DataLoader, Dataset, DistributedSampler, IterableDataset
 from tqdm import tqdm
 from transformers.modeling_outputs import CausalLMOutputWithPast
-
+from torch.nn.utils.rnn import pad_sequence
 from prismatic.models.vlms import PrismaticVLM
 from prismatic.overwatch import initialize_overwatch
 from prismatic.training.metrics import Metrics, VLAMetrics
@@ -25,7 +25,7 @@ from prismatic.util import check_bloat16_supported
 from prismatic.util.batching_utils import SplitModalitySampler
 from prismatic.util.data_utils import PaddedCollatorForActionPrediction, PaddedCollatorForLanguageModeling
 from prismatic.vla.action_tokenizer import ActionTokenizer
-
+from prismatic.models.backbones.llm.prompting import PurePromptBuilder
 # Initialize Overwatch =>> Wraps `logging.Logger`
 overwatch = initialize_overwatch(__name__)
 
@@ -398,26 +398,28 @@ class TrainingStrategy(ABC):
     def run_latent_action_training(
         self,
         vla_dataset: IterableDataset,
-        collator: PaddedCollatorForActionPrediction,
-        action_tokenizer: ActionTokenizer,
+        processor, 
+        latent_action_model,
         metrics: VLAMetrics,
         save_interval: int = 2500,
         save_full_model: bool = True,
     ) -> None:
         """Run the VLA training loop for the given `dataset` and `collator`; log losses, action metrics to `metrics`."""
-        assert isinstance(vla_dataset, IterableDataset), "VLA training expects an IterableDataset!"
+        # assert isinstance(vla_dataset, IterableDataset), "VLA training expects an IterableDataset!"
         assert self.grad_accumulation_steps == 1, "VLA training does not support gradient accumulation!"
 
         # Create a DataLoader =>> Set `num_workers` to 0; RLDS loader handles parallelism!
-        dataloader = DataLoader(
-            vla_dataset,
-            batch_size=self.per_device_batch_size,
-            sampler=None,
-            collate_fn=collator,
-            num_workers=0,
-            worker_init_fn=self.worker_init_fn,
-        )
+        # dataloader = DataLoader(
+        #     vla_dataset,
+        #     batch_size=self.per_device_batch_size,
+        #     sampler=None,
+        #     collate_fn=collator,
+        #     num_workers=0,
+        #     worker_init_fn=self.worker_init_fn,
+        # )
 
+        dataloader = vla_dataset
+        
         # === Train ===
         status = metrics.get_status()
         with tqdm(
@@ -437,6 +439,60 @@ class TrainingStrategy(ABC):
             for batch in dataloader:
                 # Note that we'll unpack batch (and let AMP/FSDP do its thing) in the VLM.forward() call
                 #   => Basically, if we're using mixed precision (or not), autocast()/FSDP will move to device!
+                
+                with torch.no_grad():
+                    video = torch.stack([batch["init_pixel_values"], batch["goal_pixel_values"]], dim=1).to(latent_action_model.device)
+                    latent_action_idx_batch = latent_action_model.vq_encode(video)['indices'].squeeze()
+
+                input_ids_list = []
+                labels_list = []
+                
+                if batch['actions'].shape[0] == 1:
+                    latent_action_idx_batch = latent_action_idx_batch.unsqueeze(0)
+                    
+                for idx, latent_action_idx in enumerate(latent_action_idx_batch):
+                    action_vocab = [f'<ACT_{i.item()}>' for i in latent_action_idx]   # [ACT_1, ACT_2, ... ACT_K]
+
+                    action_tokens = ''
+                    for i, action in enumerate(action_vocab):
+                        action_tokens += action
+
+                    # Add instruction to VLA prompt
+                    prompt_builder = PurePromptBuilder("openvla")
+                    conversation = [
+                        {"from": "human", "value": f"What action should the robot take to {batch['instructions'][idx]}?"},
+                        {"from": "gpt", "value": action_tokens},
+                    ]
+                    for turn in conversation:
+                        prompt_builder.add_turn(turn["from"], turn["value"])
+
+                    # Tokenize (w/ `base_tokenizer`)
+                    input_ids = processor.tokenizer(prompt_builder.get_prompt(), add_special_tokens=True).input_ids
+                    labels = list(input_ids)
+
+                    # Tensorize =>> Run Image Transform to get `pixel_values` =>> Return
+                    #   =>> IMPORTANT :: IF WE'RE USING HF .forward(..., labels=labels), SHIFTING HAPPENS _INSIDE_ MODEL!
+                    input_ids, labels = torch.tensor(input_ids), torch.tensor(labels)
+
+                    labels[: -(len(action_vocab) + 1)] = -100
+
+                    input_ids_list.append(input_ids)
+                    labels_list.append(labels)
+
+            
+                input_ids = pad_sequence(input_ids_list, batch_first=True, padding_value=processor.tokenizer.pad_token_id)
+                labels = pad_sequence(labels_list, batch_first=True, padding_value=-100)
+
+                # Truncate (if necessary)
+                input_ids, labels = input_ids[:, : processor.tokenizer.model_max_length], labels[:, : processor.tokenizer.model_max_length]
+
+                # Get `attention_mask` by checking for `pad_token_id`
+                attention_mask = input_ids.ne(processor.tokenizer.pad_token_id)
+
+                batch["input_ids"] = input_ids
+                batch["attention_mask"] = attention_mask
+                batch["labels"] = labels      
+                
                 with torch.autocast(
                     "cuda", dtype=self.mixed_precision_dtype, enabled=self.enable_mixed_precision_training
                 ):
@@ -464,7 +520,7 @@ class TrainingStrategy(ABC):
                 #   2) Compute boolean "mask" where "labels > 2" (where 2 is ID for `EOS_TOKEN`)
                 #           => If masking out EOS, then it's just "labels != -100 (IGNORE_INDEX)
                 #   3) Compute masked accuracy as `(preds == logits) & mask` --> sum/divide by # unmasked!
-                action_preds = output.logits[:, self.vlm.vision_backbone.num_patches : -1].argmax(dim=2)
+                action_preds = output.logits[:, self.vlm.vision_backbone.num_patches * 3 : -1].argmax(dim=2)
                 action_gt = batch["labels"][:, 1:].to(action_preds.device)
                 # Mask out non-special tokens
                 mask = action_gt > 32000      
@@ -490,29 +546,29 @@ class TrainingStrategy(ABC):
                 metrics.commit(action_accuracy=action_accuracy, l1_loss=action_l1_loss, update_step_time=True)
 
                 # Compute metrics per dataset --> only on rank_zero since we don't log them on other workers anyways
-                if overwatch.is_rank_zero():
-                    datasets = set(batch["dataset_names"])
-                    if len(datasets) > 1:
-                        for ds in datasets:
-                            ds_mask = torch.tensor([elem == ds for elem in batch["dataset_names"]])
-                            action_accuracy_ds = correct_preds[ds_mask].sum().float() / mask[ds_mask].sum().float()
-                            # continuous_actions_pred_ds = torch.tensor(
-                            #     action_tokenizer.decode_token_ids_to_actions(
-                            #         action_preds[ds_mask][mask[ds_mask]].cpu().numpy()
-                            #     )
-                            # )
-                            # continuous_actions_gt_ds = torch.tensor(
-                            #     action_tokenizer.decode_token_ids_to_actions(
-                            #         action_gt[ds_mask][mask[ds_mask]].cpu().numpy()
-                            #     )
-                            # )
-                            # action_l1_loss_ds = torch.nn.functional.l1_loss(
-                            #     continuous_actions_pred_ds, continuous_actions_gt_ds
-                            # )
-                            action_l1_loss_ds = torch.tensor(0.)
-                            metrics.commit_for_dataset(
-                                dataset_name=ds.decode(), action_accuracy=action_accuracy_ds, l1_loss=action_l1_loss_ds
-                            )
+                # if overwatch.is_rank_zero():
+                #     datasets = set(batch["dataset_names"])
+                #     if len(datasets) > 1:
+                #         for ds in datasets:
+                #             ds_mask = torch.tensor([elem == ds for elem in batch["dataset_names"]])
+                #             action_accuracy_ds = correct_preds[ds_mask].sum().float() / mask[ds_mask].sum().float()
+                #             # continuous_actions_pred_ds = torch.tensor(
+                #             #     action_tokenizer.decode_token_ids_to_actions(
+                #             #         action_preds[ds_mask][mask[ds_mask]].cpu().numpy()
+                #             #     )
+                #             # )
+                #             # continuous_actions_gt_ds = torch.tensor(
+                #             #     action_tokenizer.decode_token_ids_to_actions(
+                #             #         action_gt[ds_mask][mask[ds_mask]].cpu().numpy()
+                #             #     )
+                #             # )
+                #             # action_l1_loss_ds = torch.nn.functional.l1_loss(
+                #             #     continuous_actions_pred_ds, continuous_actions_gt_ds
+                #             # )
+                #             action_l1_loss_ds = torch.tensor(0.)
+                #             metrics.commit_for_dataset(
+                #                 dataset_name=ds.decode(), action_accuracy=action_accuracy_ds, l1_loss=action_l1_loss_ds
+                #             )
 
                 # === Gradient Step ===
 
