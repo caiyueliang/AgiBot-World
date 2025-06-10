@@ -29,16 +29,17 @@ def resize_img(img, width, height):
 def infer(policy, cfg):
 
     rclpy.init()
+    current_path = os.getcwd()
 
     # load robot_cfg
     with open(
-        os.path.join("benchmark/ader/eval_tasks/iros_restock_supermarket_items.json"),
+        os.path.join("../benchmark/ader/eval_tasks/iros_restock_supermarket_items.json"),
         "r",
     ) as f:
         task_content = json.load(f)
     robot_cfg_file = task_content["robot"]["robot_cfg"]
     with open(
-        os.path.join("server/source/genie.sim.lab/robot_cfg/", robot_cfg_file
+        os.path.join("../server/source/genie.sim.lab/robot_cfg/", robot_cfg_file
         ),
         "r",
     ) as f:
@@ -70,7 +71,7 @@ def infer(policy, cfg):
             img_h = bridge.compressed_imgmsg_to_cv2(img_h_raw, desired_encoding="rgb8")
             img_l = bridge.compressed_imgmsg_to_cv2(img_l_raw, desired_encoding="rgb8")
             img_r = bridge.compressed_imgmsg_to_cv2(img_r_raw, desired_encoding="rgb8")
-            
+
             lang = "Pick up the brown plum juice from the restock box with the right arm.;Place the brown plum juice on the shelf where the brown plum juice is located with the right arm."
 
             # img_h_pil = Image.fromarray(img_h)
@@ -98,9 +99,9 @@ def infer(policy, cfg):
 class GenerateConfig:
 
     model_family: str = "openvla"                    # Model family
-    pretrained_checkpoint: Union[str, Path] = "rundir"
+    pretrained_checkpoint: Union[str, Path] = "checkpoints/finetuned"
     load_in_8bit: bool = False                       # (For OpenVLA only) Load with 8-bit quantization
-    load_in_4bit: bool = False                       # (For OpenVLA only) Load with 4-bit quantization
+    load_in_4bit: bool = True                       # (For OpenVLA only) Load with 4-bit quantization
 
     center_crop: bool = False                        # Center crop? (if trained w/ random crop image aug)
     local_log_dir: str = "./experiments/eval_logs"   # Local directory for eval logs

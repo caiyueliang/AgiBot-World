@@ -161,6 +161,9 @@ class WrappedModel(torch.nn.Module):
     def __init__(self, cfg):
         super().__init__()
 
+        # Load VLA
+        self.vla = get_model(cfg)
+
         # Load action decoder
         self.action_decoder = ActionDecoderWrapper(
             window_size=cfg.window_size,
@@ -169,11 +172,12 @@ class WrappedModel(torch.nn.Module):
             balancing_factor=cfg.balancing_factor,
             with_proprio=cfg.with_proprio,
             )
-        
-        self.action_decoder.net.load_state_dict(torch.load(cfg.action_decoder_path))
 
-        # Load VLA
-        self.vla = get_model(cfg)
+        try:
+            self.action_decoder.net.load_state_dict(torch.load(cfg.action_decoder_path))
+            print("success loading action decoder")
+        except:
+            pass
 
 
 class WrappedGenieEvaluation():
