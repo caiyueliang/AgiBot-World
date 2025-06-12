@@ -41,8 +41,8 @@ pip install "flash-attn==2.5.5" --no-build-isolation
 
 ### :three: Modify your configs
 
-1) You should first set the pretrained UniVLA and latent action model path in ```vla_path``` and ```lam_path``` of the [training config](https://github.com/OpenDriveLab/UniVLA/blob/b502b3eddc05fef9984d34932a41c96e5a9f21a3/vla-scripts/finetune_libero.py#L107).
-2) Set your local dataset path in [```data_root_dir```](https://github.com/OpenDriveLab/UniVLA/blob/b502b3eddc05fef9984d34932a41c96e5a9f21a3/vla-scripts/finetune_libero.py#L110).
+1) You should first set the pretrained UniVLA and latent action model path in ```vla_path``` and ```lam_path``` of the [training config](https://github.com/OpenDriveLab/AgiBot-World/blob/dc59e3fa98fa2705ff2cbd5f9ece0efff53e7327/scripts/finetune_genie.py#L191).
+2) Set your local dataset path in [```data_root_dir```](https://github.com/OpenDriveLab/AgiBot-World/blob/dc59e3fa98fa2705ff2cbd5f9ece0efff53e7327/scripts/finetune_genie.py#L194).
 
 ### :four: Running
 
