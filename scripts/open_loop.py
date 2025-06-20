@@ -76,8 +76,6 @@ def calc_mse_for_single_trajectory(
 
         lang = dataset.data[step]["detailed_job_description"]
 
-        # lang = "Pick up the brown plum juice from the restock box with the right arm.;Place the brown plum juice on the shelf where the brown plum juice is located with the right arm."
-        
         # 将图像转换为numpy数组
         img_h = np.array(img_h)
         img_l = np.array(img_l)
@@ -165,7 +163,7 @@ class GenerateConfig:
     hidden_dim: int = 1024
     balancing_factor: float = 0.01                     # larger for smoother
     
-    data_root_dir: str = "dataset/clean_desktop"  
+    data_root_dir: str = "dataset"  
     save_path: str = f"openloop_results/output.png"
     
     with_proprio: bool = True
@@ -181,8 +179,8 @@ def get_policy(cfg: GenerateConfig) -> None:
     wrapped_model = WrappedModel(cfg)
     wrapped_model.cuda()
     wrapped_model.eval()
-    policy = WrappedGenieEvaluation(cfg, wrapped_model)
     
+    policy = WrappedGenieEvaluation(cfg, wrapped_model)
 
     # Load gensim dataset
     from prismatic.vla.datasets import A2dDataset

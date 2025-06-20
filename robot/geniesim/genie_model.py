@@ -7,25 +7,6 @@ from experiments.robot.openvla_utils import get_processor
 from prismatic.models.policy.transformer_utils import MAPBlock
 
 
-def positionalencoding1d(d_model, length):
-    """
-    :param d_model: dimension of the model
-    :param length: length of positions
-    :return: length*d_model position matrix
-    """
-    if d_model % 2 != 0:
-        raise ValueError("Cannot use sin/cos positional encoding with "
-                         "odd dim (got dim={:d})".format(d_model))
-    pe = torch.zeros(length, d_model)
-    position = torch.arange(0, length).unsqueeze(1)
-    div_term = torch.exp((torch.arange(0, d_model, 2, dtype=torch.float) *
-                         -(math.log(10000.0) / d_model)))
-    pe[:, 0::2] = torch.sin(position.float() * div_term)
-    pe[:, 1::2] = torch.cos(position.float() * div_term)
-
-    return pe
-
-
 class ActionDecoder(torch.nn.Module):
     def __init__(
         self,
@@ -39,21 +20,25 @@ class ActionDecoder(torch.nn.Module):
         super().__init__()
         
         if with_proprio:
-            self.proprio_proj = nn.Linear(n_joints, hidden_dim)
-
+            self.proprio_proj = nn.Linear(n_joints, hidden_dim)  # remove gripper
+            
+        self.proj_l = nn.Linear(2176, vis_dim)
+        self.proj_r = nn.Linear(2176, vis_dim)
+        self.proj_h = nn.Linear(2176, vis_dim)
+        
         self.latent_action_pool = MAPBlock(
             n_layers=n_layers,
             vis_dim=vis_dim,
             embed_dim=hidden_dim,
             n_heads=hidden_dim//64,
             )
-
+        
         self.visual_pool = MAPBlock(
             vis_dim=vis_dim,
             embed_dim=hidden_dim,
             n_heads=hidden_dim//64,
             )
-
+        
         if with_proprio:
             self.proj = nn.Sequential(
                 nn.Linear(hidden_dim * 2, hidden_dim * 8), 
@@ -67,8 +52,9 @@ class ActionDecoder(torch.nn.Module):
                 nn.Linear(hidden_dim * 4, n_joints * window_size),
             )
 
-    def forward(self, latent_action_tokens, visual_embed, proprio=None):
-            
+    def forward(self, latent_action_tokens, visual_embed, raw_visual, proprio=None):
+        
+        visual_embed = torch.cat((visual_embed, self.proj_h(raw_visual[:,:256,:]), self.proj_l(raw_visual[:,256:512,:]), self.proj_r(raw_visual[:,512:768,:])),dim=1)
         visual_embed = self.visual_pool(visual_embed)
         
         latent_action_tokens = latent_action_tokens[:, -4:]
@@ -82,8 +68,8 @@ class ActionDecoder(torch.nn.Module):
             action = self.proj(action_token)
 
         return action
-
-
+            
+             
 class ActionDecoderWrapper(nn.Module):
     def __init__(
         self,
@@ -120,7 +106,7 @@ class ActionDecoderWrapper(nn.Module):
         self.action_buffer_mask = np.zeros((self.temporal_mask.shape[0], self.temporal_mask.shape[0]), dtype=np.bool_)
 
     
-    def forward(self, latent_actions, visual_embed, proprio=None):
+    def forward(self, latent_actions, visual_embed, raw_visual, proprio=None):
         
         # Run specialist policy
         if self.with_proprio:
@@ -129,7 +115,7 @@ class ActionDecoderWrapper(nn.Module):
             proprio = None
         
         # Forward action decoder
-        pred_action = self.net(latent_actions.to(torch.float), visual_embed.to(torch.float), proprio).reshape(-1, self.temporal_size, self.n_joints)
+        pred_action = self.net(latent_actions.to(torch.float), visual_embed.to(torch.float), raw_visual.to(torch.float), proprio).reshape(-1, self.temporal_size, self.n_joints)
         pred_action = np.array(pred_action.tolist())
         
         # Shift action buffer
@@ -148,13 +134,12 @@ class ActionDecoderWrapper(nn.Module):
 
         # gripper action clip
         
-        if action_prediction[-1] < 0.5:
+        if action_prediction[-1] < 0.25:
             action_prediction[-1] = 0
         else:
             action_prediction[-1] = 1
 
-
-        if action_prediction[7] < 0.5:
+        if action_prediction[7] < 0.25:
             action_prediction[7] = 0
         else:
             action_prediction[7] = 1
@@ -165,7 +150,10 @@ class ActionDecoderWrapper(nn.Module):
 class WrappedModel(torch.nn.Module):
     def __init__(self, cfg):
         super().__init__()
-
+        
+        # Load VLA
+        self.vla = get_model(cfg)
+        
         # Load action decoder
         self.action_decoder = ActionDecoderWrapper(
             window_size=cfg.window_size,
@@ -175,10 +163,11 @@ class WrappedModel(torch.nn.Module):
             with_proprio=cfg.with_proprio,
             )
         
-        self.action_decoder.net.load_state_dict(torch.load(cfg.action_decoder_path))
-
-        # Load VLA
-        self.vla = get_model(cfg)
+        try:
+            self.action_decoder.net.load_state_dict(torch.load(cfg.action_decoder_path))
+            print("success loading action decoder")
+        except:
+            pass
 
 
 class WrappedGenieEvaluation():
@@ -225,7 +214,7 @@ class WrappedGenieEvaluation():
             prompt_hist_action += latent_action
 
         # Query model to get latent action
-        latent_action, visual_embed, generated_ids = get_latent_action(
+        latent_action, visual_embed, raw_visual, generated_ids = get_latent_action(
             self.cfg,
             self.model.vla,
             observation,
@@ -250,6 +239,6 @@ class WrappedGenieEvaluation():
         state = state.unsqueeze(0)
 
         # Get decoded action
-        action = self.model.action_decoder(latent_action, visual_embed, state)
+        action = self.model.action_decoder(latent_action, visual_embed, raw_visual, state)
 
         return action

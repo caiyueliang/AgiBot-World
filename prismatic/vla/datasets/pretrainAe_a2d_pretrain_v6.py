@@ -82,23 +82,6 @@ class ActionHead:
     use_real_state = False  # real joint_abs_position or full -1 fake state
 
 
-train_task_ids = [
-    678, 
-]
-
-train_set = {}
-val_set = {}
-for num in train_task_ids:
-    train_set[str(num)] = {
-        "use_cam_list": ["head", "hand_right", "hand_left"],
-        "label_file_name": f"task_{num}_train.json",
-    }
-    val_set[str(num)] = {
-        "use_cam_list": ["head", "hand_right", "hand_left"],
-        "label_file_name": f"task_{num}_val.json",
-    }
-
-
 @dataclass
 class DatasetArguments(BaseDatasetArguments):
     meta_json_dir: Optional[str] = "dustbin"
@@ -112,6 +95,7 @@ class DatasetArguments(BaseDatasetArguments):
     force_image_size: int = field(default=CommonCfg.force_image_size)
 
     dataset_task_cfg: Optional[Dict[str, str]] = field(default_factory=lambda: train_set)
+    
     episode_processors: Optional[List[Dict]] = field(
         default_factory=lambda: [
             dict(type="EpisodeProcessorLoad", gripper_source="state"),  # gripper_source: state or action
@@ -119,11 +103,6 @@ class DatasetArguments(BaseDatasetArguments):
             dict(type="EpisodeProcessorRelableStaticFrames"),
             dict(type="EpisodeProcessorInterpolateGripperValue", downsample_ratio=15, g_max=120),
             dict(type="EpisodeProcessorNormalizeGripperValue", g_min=0, g_max=120, verbose=True),
-            # dict(type="EpisodeProcessorVlaBinaryDexterousHand"),
-            # dict(type="EpisodeProcessorVlaLabelKeyFrames"),
-            # dict(type="EpisodeProcessorVlaStageLabel"),
-            # dict(type="EpisodeProcessorRemoveResumePosition", shift=30),
-            # dict(type="EpisodeProcessorVlaRemapInstruction"),
         ]
     )
     dataset_processors: Optional[List[Dict]] = field(
@@ -151,13 +130,6 @@ class DatasetArguments(BaseDatasetArguments):
                 max_value=1,
                 min_value=-1,
             ),
-            # dict(type="RuntimeImageAugColorJitter", prob_to_process=0.33),
-            # dict(type="RuntimeImageAugCorrupt", prob_to_process=0.33),
-            # dict(
-            #     type="RuntimeImageAugRandomDropImage",
-            #     prob_to_process=[0.1, 0.1, 0.1],
-            #     images=["cam_tensor_head_color", "cam_tensor_hand_right_color", "cam_tensor_hand_left_color"],
-            # ),
         ]
     )
 
@@ -170,11 +142,6 @@ class DatasetArguments(BaseDatasetArguments):
             dict(type="EpisodeProcessorRelableStaticFrames"),
             dict(type="EpisodeProcessorInterpolateGripperValue", downsample_ratio=15, g_max=120),
             dict(type="EpisodeProcessorNormalizeGripperValue", g_min=0, g_max=120, verbose=True),
-            # dict(type="EpisodeProcessorVlaBinaryDexterousHand"),
-            # dict(type="EpisodeProcessorVlaLabelKeyFrames"),
-            # dict(type="EpisodeProcessorVlaStageLabel"),
-            # dict(type="EpisodeProcessorRemoveResumePosition", shift=30),
-            # dict(type="EpisodeProcessorVlaRemapInstruction"),
         ]
     )
     eval_dataset_processors: Optional[List[Dict]] = field(
@@ -204,8 +171,8 @@ class DatasetArguments(BaseDatasetArguments):
             ),
         ]
     )
-
-
+    
+            
 @dataclass
 class ModelArguments(BaseModelArguments):
     model_name_or_path: str = field(default="")
