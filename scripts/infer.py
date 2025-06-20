@@ -30,22 +30,7 @@ def infer(policy, cfg):
 
     rclpy.init()
     current_path = os.getcwd()
-
-    # load robot_cfg
-    with open(
-        os.path.join("../benchmark/ader/eval_tasks/iros_restock_supermarket_items.json"),
-        "r",
-    ) as f:
-        task_content = json.load(f)
-    robot_cfg_file = task_content["robot"]["robot_cfg"]
-    with open(
-        os.path.join("../server/source/genie.sim.lab/robot_cfg/", robot_cfg_file
-        ),
-        "r",
-    ) as f:
-        robot_cfg = json.load(f)
-
-    sim_ros_node = SimROSNode(robot_cfg=robot_cfg)
+    sim_ros_node = SimROSNode()
     spin_thread = threading.Thread(
         target=rclpy.spin, args=(sim_ros_node,)
     )
