@@ -48,35 +48,33 @@ The dataset directory structure is organized as follows:
 # Dataset Directory Structure
 
 You can organize dataset directory structure as follows:
-
-<code>
-dataset/<br>
-├── 2810051/<br>
-│   ├── 3026521/<br>
-│   │   ├── A2D0015AB00061/<br>
-│   │   │   ├── 12030289/<br>
-│   │   │   │   ├── camera/<br>
-│   │   │   │   │   ├── 0/<br>
-│   │   │   │   │   │   ├── hand_left_color.jpg<br>
-│   │   │   │   │   │   ├── hand_right_color.jpg<br>
-│   │   │   │   │   │   ├── head_color.jpg<br>
-│   │   │   │   │   │   └── ...<br>
-│   │   │   │   │   └── ...<br>
-│   │   │   │   ├── aligned_joints.h5<br>
-│   │   │   │   ├── data_info.json<br>
-│   │   │   │   ├── meta_info.json<br>
-│   │   │   │   └── ...<br>
-│   │   │   └── ...<br>
-│   │   └── ...<br>
-│   └── ...<br>
-├── 2810052<br>
-├── ...<br>
-├── task_1_train.json<br>
-├── task_2_train.json<br>
-├── ...<br>
-├── task_10_train.json<br>
-</code>
-
+```
+dataset
+├── 2810051
+│   ├── 3026521
+│   │   ├── A2D0015AB00061
+│   │   │   ├── 12030289
+│   │   │   │   ├── camera
+│   │   │   │   │   ├── 0
+│   │   │   │   │   │   ├── hand_left_color.jpg
+│   │   │   │   │   │   ├── hand_right_color.jpg
+│   │   │   │   │   │   ├── head_color.jpg
+│   │   │   │   │   │   └── ...
+│   │   │   │   │   └── ...
+│   │   │   │   ├── aligned_joints.h5
+│   │   │   │   ├── data_info.json
+│   │   │   │   ├── meta_info.json
+│   │   │   │   └── ...
+│   │   │   └── ...
+│   │   └── ...
+│   └── ...
+├── 2810052
+├── ...
+├── task_1_train.json
+├── task_2_train.json
+├── ...
+├── task_10_train.json
+```
 Subfolder such as `2810051`, `2810083` comes from different tasks. You can move all of them into folder `dataset` as above, and then choose which task to use by modify `--task_ids` as below.
 
 ### :four: Running
