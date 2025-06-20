@@ -229,4 +229,5 @@ def get_vla_latent_action(vla, processor, base_vla_name, obs, task_label, center
 
     # Get latent action.
     action = vla.predict_latent_action(**inputs, do_sample=True, temperature=0.75, top_p = 0.9)
+
     return action

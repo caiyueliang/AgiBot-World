@@ -17,11 +17,18 @@ class ActionDecoder(torch.nn.Module):
         window_size=30,
         hidden_dim=512,
         with_proprio=False,
+        wogripper=False,
         ):
         super().__init__()
         
+        self.with_proprio = with_proprio
+        self.wogripper = wogripper
+        
         if with_proprio:
-            self.proprio_proj = nn.Linear(n_joints, hidden_dim)  # remove gripper
+            if wogripper:
+                self.proprio_proj = nn.Linear(n_joints-2, hidden_dim)  # remove gripper
+            else:
+                self.proprio_proj = nn.Linear(n_joints, hidden_dim)
             
         self.proj_l = nn.Linear(2176, vis_dim)
         self.proj_r = nn.Linear(2176, vis_dim)
@@ -52,7 +59,7 @@ class ActionDecoder(torch.nn.Module):
                 nn.GELU(),
                 nn.Linear(hidden_dim * 8, n_joints * window_size),
             )
-        
+
     def forward(self, latent_action_tokens, visual_embed, raw_visual, proprio=None):
         
         visual_embed = torch.cat((visual_embed, self.proj_h(raw_visual[:,:256,:]), self.proj_l(raw_visual[:,256:512,:]), self.proj_r(raw_visual[:,512:768,:])),dim=1)
@@ -63,17 +70,18 @@ class ActionDecoder(torch.nn.Module):
         
         if proprio is not None:
             proprio = proprio.squeeze(1)
-            # proprio_l_arm = proprio[:,:7]
-            # proprio_r_arm = proprio[:,8:-1]
-            # proprio = torch.concat((proprio_l_arm, proprio_r_arm), dim=-1)
+            if self.wogripper:
+                proprio_l_arm = proprio[:,:7]
+                proprio_r_arm = proprio[:,8:-1]
+                proprio = torch.concat((proprio_l_arm, proprio_r_arm), dim=-1)
             proprio = self.proprio_proj(proprio)
             action = self.proj(torch.cat((action_token, proprio), dim=1))
         else:
             action = self.proj(action_token)
 
         return action
-
-
+            
+             
 class ActionDecoderWrapper(nn.Module):
     def __init__(
         self,
@@ -83,6 +91,7 @@ class ActionDecoderWrapper(nn.Module):
         n_joints=16,
         balancing_factor=0.01,
         with_proprio=False,
+        wogripper=False,
         ):
         super().__init__()
         self.net = ActionDecoder(
@@ -91,11 +100,12 @@ class ActionDecoderWrapper(nn.Module):
             hidden_dim=hidden_dim,
             n_joints=n_joints,
             with_proprio=with_proprio,
+            wogripper=wogripper,
             )
         
         self.with_proprio = with_proprio
         self.n_joints = n_joints
-        self.temporal_size = int(window_size)
+        self.temporal_size = window_size
         self.temporal_mask = torch.flip(torch.triu(torch.ones(self.temporal_size, self.temporal_size, dtype=torch.bool)), dims=[1]).numpy()
         
         self.action_buffer = np.zeros((self.temporal_mask.shape[0], self.temporal_mask.shape[0], n_joints))
@@ -105,7 +115,6 @@ class ActionDecoderWrapper(nn.Module):
         self.temporal_weights = np.array([np.exp(-1 * balancing_factor * i) for i in range(self.temporal_size)])[:, None]
 
         self.action_queue = Queue()
-        
         
     def reset(self):
         self.action_buffer = np.zeros((self.temporal_mask.shape[0], self.temporal_mask.shape[0], self.n_joints))
@@ -165,7 +174,10 @@ class ActionDecoderWrapper(nn.Module):
 class WrappedModel(torch.nn.Module):
     def __init__(self, cfg):
         super().__init__()
-
+        
+        # Load VLA
+        self.vla = get_model(cfg)
+        
         # Load action decoder
         self.action_decoder = ActionDecoderWrapper(
             window_size=cfg.window_size,
@@ -173,12 +185,14 @@ class WrappedModel(torch.nn.Module):
             hidden_dim=cfg.hidden_dim,
             balancing_factor=cfg.balancing_factor,
             with_proprio=cfg.with_proprio,
+            wogripper=cfg.wogripper,
             )
         
-        self.action_decoder.net.load_state_dict(torch.load(cfg.action_decoder_path))
-
-        # Load VLA
-        self.vla = get_model(cfg)
+        try:
+            self.action_decoder.net.load_state_dict(torch.load(cfg.action_decoder_path))
+            print("success loading action decoder")
+        except:
+            pass
 
 
 class WrappedGenieEvaluation():

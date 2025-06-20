@@ -48,11 +48,18 @@ class ActionDecoder(torch.nn.Module):
         window_size=30,
         hidden_dim=512,
         with_proprio=False,
+        wogripper=False,
         ):
         super().__init__()
         
+        self.with_proprio = with_proprio
+        self.wogripper = wogripper
+        
         if with_proprio:
-            self.proprio_proj = nn.Linear(n_joints, hidden_dim)  # remove gripper
+            if wogripper:
+                self.proprio_proj = nn.Linear(n_joints-2, hidden_dim)  # remove gripper
+            else:
+                self.proprio_proj = nn.Linear(n_joints, hidden_dim)
             
         self.proj_l = nn.Linear(2176, vis_dim)
         self.proj_r = nn.Linear(2176, vis_dim)
@@ -94,6 +101,10 @@ class ActionDecoder(torch.nn.Module):
         
         if proprio is not None:
             proprio = proprio.squeeze(1)
+            if self.wogripper:
+                proprio_l_arm = proprio[:,:7]
+                proprio_r_arm = proprio[:,8:-1]
+                proprio = torch.concat((proprio_l_arm, proprio_r_arm), dim=-1)
             proprio = self.proprio_proj(proprio)
             action = self.proj(torch.cat((action_token, proprio), dim=1))
         else:
@@ -111,6 +122,7 @@ class Wrapped_Model(torch.nn.Module):
         decoder_n_layers=1,
         decoder_hidden_dim=512,
         with_proprio=False,
+        wogripper=False,
         action_decoder_path="",
         decoupled_loss=False,
         ):
@@ -121,6 +133,7 @@ class Wrapped_Model(torch.nn.Module):
             n_layers=decoder_n_layers,
             hidden_dim=decoder_hidden_dim,
             with_proprio=with_proprio,
+            wogripper=wogripper,
             window_size=window_size,
             )
         try:
@@ -679,6 +692,7 @@ if __name__ == "__main__":
     parser.add_argument("--decoder_n_layers", type=int, default=1, help="Number of decoder layers")
     parser.add_argument("--decoder_hidden_dim", type=int, default=512, help="Decoder hidden dimension")
     parser.add_argument("--with_proprio", action="store_true", help="Whether to use proprioceptive data")
+    parser.add_argument("--wogripper", action="store_true", help="Whether to not use proprioceptive gripper data")
     parser.add_argument("--use_lam_cache", action="store_true", help="Whether to use LAM cache")
     parser.add_argument("--decouple", action="store_true", help="Whether to decouple")
     parser.add_argument("--adr_path", type=str, default="", help="Path to ADR")
