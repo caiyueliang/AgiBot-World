@@ -24,13 +24,11 @@ QOS_PROFILE_LATEST = QoSProfile(
 
 
 class SimROSNode(Node):
-    def __init__(self, robot_cfg=None, node_name="univla_node"):
+    def __init__(self, node_name="univla_node"):
         super().__init__(
             node_name,
             parameter_overrides=[Parameter("use_sim_time", Parameter.Type.BOOL, True)],
         )
-
-        self.robot_cfg = robot_cfg
 
         # publish
         self.pub_joint_command = self.create_publisher(
@@ -178,7 +176,7 @@ class SimROSNode(Node):
         msg_remap.position.append(joint_name_state_dict["idx25_arm_l_joint5"])
         msg_remap.position.append(joint_name_state_dict["idx26_arm_l_joint6"])
         msg_remap.position.append(joint_name_state_dict["idx27_arm_l_joint7"])
-        left_gripper_pos = min(1, max(0.0, (0.75 - (joint_name_state_dict[gripper_control_joints["left"].split("/")[-1]]))/0.75))
+        left_gripper_pos = min(1, max(0.0, (0.75 - (joint_name_state_dict["idx41_gripper_l_outer_joint1"]))/0.75))
         msg_remap.position.append(left_gripper_pos)
 
         msg_remap.position.append(joint_name_state_dict["idx61_arm_r_joint1"])
@@ -188,7 +186,7 @@ class SimROSNode(Node):
         msg_remap.position.append(joint_name_state_dict["idx65_arm_r_joint5"])
         msg_remap.position.append(joint_name_state_dict["idx66_arm_r_joint6"])
         msg_remap.position.append(joint_name_state_dict["idx67_arm_r_joint7"])
-        right_gripper_pos = min(1, max(0.0, (0.75 - (joint_name_state_dict[gripper_control_joints["right"].split("/")[-1]]))/0.75))
+        right_gripper_pos = min(1, max(0.0, (0.75 - (joint_name_state_dict["idx81_gripper_r_outer_joint1"]))/0.75))
         msg_remap.position.append(right_gripper_pos)
 
         with self.lock_joint_state:
