@@ -117,8 +117,9 @@ omni_python scripts/infer.py
 ## :pushpin: TODO list
 -  [x] Training code and dataloader for challenge dataset.
 -  [x] Evaluation code.
--  [ ] Finetuned checkpoints on challenge dataset.
+-  [ ] Finetuned UniVLA checkpoints on challenge simdata.
 -  [ ] Updated simulation environment.
+-  [ ] Finetuned RDT checkpoints on challenge simdata.
 
 ## :pencil: Citation
 If you find our code or models useful in your work, please cite [our paper](https://arxiv.org/pdf/2505.06111):
