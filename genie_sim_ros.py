@@ -168,7 +168,6 @@ class SimROSNode(Node):
         msg_remap.effort = []
 
         # fmt: off
-        gripper_control_joints = self.robot_cfg["gripper"]["gripper_control_joint"]
         msg_remap.position.append(joint_name_state_dict["idx21_arm_l_joint1"])
         msg_remap.position.append(joint_name_state_dict["idx22_arm_l_joint2"])
         msg_remap.position.append(joint_name_state_dict["idx23_arm_l_joint3"])
