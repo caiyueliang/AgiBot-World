@@ -25,6 +25,22 @@ def resize_img(img, width, height):
     resized_img = np.array(resized_img)
     return resized_img
 
+def get_instruction(task_name):
+    lang = "Pick up the yellow functional beverage can on the table with the left arm.;Threw the yellow functional beverage can into the trash can with the left arm.;Pick up the green carbonated beverage can on the table with the right arm.;Threw the green carbonated beverage can into the trash can with the right arm."
+    if task_name == "iros_clear_the_countertop_waste":
+        lang = "Pick up the yellow functional beverage can on the table with the left arm.;Threw the yellow functional beverage can into the trash can with the left arm.;Pick up the green carbonated beverage can on the table with the right arm.;Threw the green carbonated beverage can into the trash can with the right arm."
+    elif task_name == "iros_restock_supermarket_items":
+        lang = "Pick up the brown plum juice from the restock box with the right arm.;Place the brown plum juice on the shelf where the brown plum juice is located with the right arm."
+    elif task_name == "iros_clear_table_in_the_restaurant":
+        lang = "Pick up the bowl on the table near the right arm with the right arm.;Place the bowl on the plate on the table with the right arm."
+    elif task_name == "iros_stamp_the_seal":
+        lang = "Pick up the stamp from the ink pad on the table with the right arm.;Stamp the document on the table with the stamp in the right arm.;Place the stamp into the ink pad on the table with the right arm."
+    elif task_name == "iros_pack_in_the_supermarket":
+        lang = "Pick up the grape juice on the table with the right arm.;Put the grape juice into the felt bag on the table with the right arm."
+    else:
+        #To be implemented
+        pass
+    return lang
 
 def infer(policy, cfg):
 
@@ -38,6 +54,8 @@ def infer(policy, cfg):
 
     bridge = CvBridge()
     count = 0
+    
+    lang = get_instruction(cfg.task_name)
 
     while rclpy.ok():
         # 打开图像文件
@@ -56,8 +74,6 @@ def infer(policy, cfg):
             img_h = bridge.compressed_imgmsg_to_cv2(img_h_raw, desired_encoding="rgb8")
             img_l = bridge.compressed_imgmsg_to_cv2(img_l_raw, desired_encoding="rgb8")
             img_r = bridge.compressed_imgmsg_to_cv2(img_r_raw, desired_encoding="rgb8")
-
-            lang = "Pick up the brown plum juice from the restock box with the right arm.;Place the brown plum juice on the shelf where the brown plum juice is located with the right arm."
 
             # img_h_pil = Image.fromarray(img_h)
             # img_h_pil.save(f'frames/head_{count:05d}.png')
@@ -101,6 +117,7 @@ class GenerateConfig:
 
     with_proprio: bool = True
     debug: bool = False
+    task_name: str = "iros_stamp_the_seal"
 
 
 @draccus.wrap()
@@ -115,6 +132,5 @@ def get_policy(cfg: GenerateConfig) -> None:
 
 
 if __name__ == "__main__":
-
     policy, cfg = get_policy()
     infer(policy, cfg)
