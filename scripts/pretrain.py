@@ -283,7 +283,7 @@ def train(cfg: TrainConfig) -> None:
         debug_one_episode=False,
     )
 
-    collator = PaddedCollatorForActionPrediction_Gensim()
+    collator = PaddedCollatorForActionPrediction_Geniesim()
     dataloader = DataLoader(
         vla_dataset,
         batch_size=cfg.per_device_batch_size,
