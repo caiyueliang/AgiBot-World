@@ -70,10 +70,10 @@ dataset
 │   └── ...
 ├── 2810052
 ├── ...
+├── task_0_train.json
 ├── task_1_train.json
-├── task_2_train.json
 ├── ...
-├── task_10_train.json
+├── task_9_train.json
 ```
 Subfolder such as `2810051`, `2810083` comes from different tasks. You can move all of them into folder `dataset` as above, and then choose which task to use by modify `--task_ids` as below.
 
