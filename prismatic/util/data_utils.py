@@ -144,7 +144,7 @@ class PaddedCollatorForActionPrediction:
     
 
 @dataclass
-class PaddedCollatorForActionPrediction_Gensim:
+class PaddedCollatorForActionPrediction_Geniesim:
 
     def __call__(self, instances: Sequence[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
         
