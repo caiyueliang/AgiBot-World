@@ -102,7 +102,7 @@ scripts/finetune_genie.py \
 --save_latest_checkpoint_only \
 --with_proprio \
 --use_lora \
---task_ids 1 \ # for task 1
+--task_ids 0 \ # for task 1
 # --task_ids 0 1 2 3 4 5 6 7 8 9 \ # for all 10 tasks
 ```
 
