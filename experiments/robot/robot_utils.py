@@ -40,11 +40,7 @@ def set_seed_everywhere(seed: int):
 
 def get_model(cfg, wrap_diffusion_policy_for_droid=False):
     """Load model for evaluation."""
-    if cfg.model_family == "openvla":
-        model = get_vla(cfg)
-    else:
-        raise ValueError("Unexpected `model_family` found in config.")
-    print(f"Loaded model: {type(model)}")
+    model = get_vla(cfg)
     return model
 
 

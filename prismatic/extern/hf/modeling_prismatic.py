@@ -374,7 +374,7 @@ class PrismaticForConditionalGeneration(PrismaticPreTrainedModel):
             patch_features = torch.concat((patch_features_h, patch_features_l, patch_features_r), dim=1)
 
             # Projection Logic =>> Update Attention Mask
-            projected_patch_embeddings = self.projector(patch_features)
+            projected_patch_embeddings = self.projector(patch_features_h)
             
             projected_patch_attention_mask = None
             if attention_mask is not None:
@@ -446,11 +446,16 @@ class PrismaticForConditionalGeneration(PrismaticPreTrainedModel):
 
             return language_model_output
         
+        try:
+            hidden_states = (patch_features,) + language_model_output.hidden_states
+        except:
+            hidden_states = language_model_output.hidden_states
+        
         return PrismaticCausalLMOutputWithPast(
             loss=language_model_output.loss,
             logits=language_model_output.logits,
             past_key_values=language_model_output.past_key_values,
-            hidden_states=language_model_output.hidden_states,
+            hidden_states=hidden_states,
             attentions=language_model_output.attentions,
             projector_features=projected_patch_embeddings,
         )       
@@ -559,11 +564,11 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
         output = self.generate(input_ids, min_new_tokens=4, max_new_tokens=4, return_dict_in_generate=True, output_hidden_states=True, **kwargs)
         generated_ids = output.sequences
 
-        
+        raw_visual = output.hidden_states[0][0]
         last_hidden_states = [hidden_states[-1] for hidden_states in output.hidden_states]
         latent_tokens = torch.cat(last_hidden_states, dim=1)#[:, :-1]
-        visual_embed = latent_tokens[:,:256*3]
-        latent_tokens = latent_tokens[:, 256*3:]
+        visual_embed = latent_tokens[:,:256]
+        latent_tokens = latent_tokens[:, 256:]
 
         # print(generated_ids)
         latent_mask = generated_ids > 32000
@@ -574,7 +579,7 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
         generated_ids = generated_ids[:, 1:][:, latent_mask[0]]
         generated_ids = generated_ids[:, -4:]
         
-        return latent_action, visual_embed, generated_ids
+        return latent_action, visual_embed, raw_visual, generated_ids
 
 
     @staticmethod

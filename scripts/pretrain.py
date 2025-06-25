@@ -14,7 +14,7 @@ import yaml
 from torch.utils.data import DataLoader
 from prismatic.extern.hf.configuration_prismatic import OpenVLAConfig
 from prismatic.extern.hf.processing_prismatic import PrismaticImageProcessor, PrismaticProcessor
-from prismatic.util.data_utils import PaddedCollatorForActionPrediction_Gensim
+from prismatic.util.data_utils import PaddedCollatorForActionPrediction_Geniesim
 import prismatic.vla.datasets.pretrain_a2d_cfg as a2d_cfg
 from prismatic.conf import VLAConfig, VLARegistry
 from prismatic.models import load, load_vla
@@ -283,7 +283,7 @@ def train(cfg: TrainConfig) -> None:
         debug_one_episode=False,
     )
 
-    collator = PaddedCollatorForActionPrediction_Gensim()
+    collator = PaddedCollatorForActionPrediction_Geniesim()
     dataloader = DataLoader(
         vla_dataset,
         batch_size=cfg.per_device_batch_size,

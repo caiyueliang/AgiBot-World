@@ -46,8 +46,9 @@ class EpisodeProcessorLoad:
             else:
                 left_abs_gripper = np.array(fid[f"{self.gripper_source}/left_effector/position"], dtype=np.float32)
                 right_abs_gripper = np.array(fid[f"{self.gripper_source}/right_effector/position"], dtype=np.float32)
-                left_abs_gripper = np.expand_dims(left_abs_gripper, axis=-1)
-                right_abs_gripper = np.expand_dims(right_abs_gripper, axis=-1)
+                if len(left_abs_gripper.shape)==1:
+                    left_abs_gripper = np.expand_dims(left_abs_gripper, axis=-1)
+                    right_abs_gripper = np.expand_dims(right_abs_gripper, axis=-1)
                 all_abs_gripper = np.concatenate((left_abs_gripper, right_abs_gripper), axis=-1)
 
             # all_abs_head: [N * [head-yaw, head-pitch]]
@@ -760,6 +761,10 @@ class RuntimeVideoPreprocessLoad:
         self.target_key = "cam_tensor_"
         self.main_key = ["head_color"]
 
+        self.dataset = []
+        self.video_folder = []
+                
+                
     def __call__(self, inputs):
         for cam_name, item in inputs["used_cam_cfg"].items():
             name = item["camera_file_name"].split(".")[0]

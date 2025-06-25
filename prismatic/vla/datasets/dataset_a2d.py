@@ -215,7 +215,8 @@ class BaseDataset(MetaDataset):
             all_dataset_episode_info = all_dataset_episode_info[:1]
 
         if statistic == True:
-            self.statistic_draw_dataset(all_dataset_episode_info)
+            # self.statistic_draw_dataset(all_dataset_episode_info)
+            pass
 
         if self.world_size is None:
             sub_data_shard = all_dataset_episode_info
@@ -233,7 +234,7 @@ class BaseDataset(MetaDataset):
         self.data, self.data_infos = self._processor_pipeline_dataset(self.raw_data)
         # logger.info(f"data_infos: {self.data_infos}")
 
-        if self.sample_rate is not None:  # TODO(hxd): sample at the last process is inefficient
+        if self.sample_rate is not None:
             data_sampled = []
             for idx, item in enumerate(self.data):
                 if idx % self.sample_rate == 0:
@@ -493,9 +494,16 @@ class A2dDataset(BaseDataset):
         while not get_data_done:
             try:
                 raw_target = super().__getitem__(idx)
+                
+                task_id = raw_target["task_id"]
+                job_id = raw_target["job_id"]
+                sn_code = raw_target["sn_code"]
+                episode_id = raw_target["episode_id"]
+                frame_idx = raw_target["frame_idx"]
+                
                 window_size = raw_target["window_size"]
 
-                action, action_mask = self.ActionSpacePadder.get_action(raw_target["action_target"], chunk_size=30)
+                action, action_mask = self.ActionSpacePadder.get_action(raw_target["action_target"], chunk_size=self.action_chunk_size)
                 state, state_mask = self.ActionSpacePadder.get_action(raw_target["agent_state"], chunk_size=1)
 
                 results = self.multi_image_get_item(
@@ -521,9 +529,15 @@ class A2dDataset(BaseDataset):
                         "proprio": agent_state,
                         "ctrl_freqs": torch.tensor([freq], dtype=torch.float32),
                         "window_size": window_size,
-                        "lang": raw_target["detailed_job_description"]
+                        "lang": raw_target["detailed_job_description"], 
+                        "task_id": task_id,
+                        "job_id": job_id,
+                        "sn_code": sn_code,
+                        "episode_id": episode_id,
+                        "frame_idx": frame_idx,
                     }
                 )
+                
                 get_data_done = True
             except Exception as error:
                 logger.error(f"process dataset idx: {idx}, {self.data[idx]['episode_dir']}, error info: {error}")
@@ -541,6 +555,7 @@ class LAMStage1Dataset(BaseDataset):
         self.pad2square = pad2square
         self.normalize_type = normalize_type
 
+                    
     def get_transform(self):
         # Build transformation function
         transform = build_transform(
@@ -583,6 +598,7 @@ class LAMStage1Dataset(BaseDataset):
                         "ctrl_freqs": torch.tensor([freq], dtype=torch.float32),
                     }
                 )
+
                 get_data_done = True
             except Exception as error:
                 logger.error(f"process dataset idx: {idx}, {self.data[idx]['episode_dir']}, error info: {error}")

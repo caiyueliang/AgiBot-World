@@ -2,13 +2,10 @@ import os
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Union
-import draccus
 import torch
 import torch.distributed as dist
 import tqdm
+import argparse
 from PIL import Image
 from transformers import AutoProcessor
 import numpy as np
@@ -21,32 +18,6 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 from transformers import AutoTokenizer
 import prismatic.vla.datasets.pretrainAe_a2d_pretrain_v6 as a2d_cfg
 from experiments.robot.geniesim.genie_model import WrappedGenieEvaluation, WrappedModel
-
-
-def setup_distributed():
-    """Initialize distributed training environment"""
-    if "RANK" not in os.environ:
-        os.environ["RANK"] = "0"
-    if "WORLD_SIZE" not in os.environ:
-        os.environ["WORLD_SIZE"] = "1"
-    if "LOCAL_RANK" not in os.environ:
-        os.environ["LOCAL_RANK"] = "0"
-    if "MASTER_ADDR" not in os.environ:
-        os.environ["MASTER_ADDR"] = "localhost"
-    if "MASTER_PORT" not in os.environ:
-        os.environ["MASTER_PORT"] = "12355"
-    # Parse environment variables
-    rank = int(os.environ["RANK"])
-    world_size = int(os.environ["WORLD_SIZE"])
-    local_rank = int(os.environ["LOCAL_RANK"])
-
-    # Initialize the distributed environment
-    dist.init_process_group(backend="nccl", init_method="env://", world_size=world_size, rank=rank)  # or 'gloo' for CPU
-
-    # Set device for this process
-    torch.cuda.set_device(local_rank)
-
-    return local_rank, world_size
 
 
 def calc_mse_for_single_trajectory(
@@ -75,8 +46,6 @@ def calc_mse_for_single_trajectory(
         img_r = Image.open(os.path.join(dataset.data[step]["episode_dir"], "camera", str(step), "hand_right_color.jpg"))
 
         lang = dataset.data[step]["detailed_job_description"]
-
-        # lang = "Pick up the brown plum juice from the restock box with the right arm.;Place the brown plum juice on the shelf where the brown plum juice is located with the right arm."
         
         # 将图像转换为numpy数组
         img_h = np.array(img_h)
@@ -146,49 +115,32 @@ def calc_mse_for_single_trajectory(
     return mse
 
 
-@dataclass
-class GenerateConfig:
-
-    model_family: str = "openvla"                    # Model family
-    pretrained_checkpoint: Union[str, Path] = f"rundir"
-    load_in_8bit: bool = False                       # (For OpenVLA only) Load with 8-bit quantization
-    load_in_4bit: bool = False                       # (For OpenVLA only) Load with 4-bit quantization
-                  
-    center_crop: bool = False                        # Center crop? (if trained w/ random crop image aug)
-    local_log_dir: str = "./experiments/eval_logs"   # Local directory for eval logs
-    seed: int = 7  
-
-    action_decoder_path:str = f"rundir/action_decoder.pt"
-    window_size: int = 30
-    
-    n_layers: int = 2
-    hidden_dim: int = 1024
-    balancing_factor: float = 0.01                     # larger for smoother
-    
-    data_root_dir: str = "dataset/clean_desktop"  
-    save_path: str = f"openloop_results/output.png"
-    
-    with_proprio: bool = True
-    
-    debug: bool = True
-    
-
-@draccus.wrap()
-def get_policy(cfg: GenerateConfig) -> None:
-
-    setup_distributed()
+def get_policy(cfg):
 
     wrapped_model = WrappedModel(cfg)
     wrapped_model.cuda()
     wrapped_model.eval()
-    policy = WrappedGenieEvaluation(cfg, wrapped_model)
     
+    policy = WrappedGenieEvaluation(cfg, wrapped_model)
 
     # Load gensim dataset
     from prismatic.vla.datasets import A2dDataset
+    train_set = {}
+    val_set = {}
+    for num in cfg.task_ids:
+        train_set[str(num)] = {
+            "use_cam_list": ["head", "hand_right", "hand_left"],
+            "label_file_name": f"task_{num}_train.json",
+        }
+        val_set[str(num)] = {
+            "use_cam_list": ["head", "hand_right", "hand_left"],
+            "label_file_name": f"task_{num}_val.json",
+        }
     dataset_args = a2d_cfg.DatasetArguments(
-        meta_json_dir=cfg.data_root_dir,
+        meta_json_dir=cfg.meta_json_dir,
         data_root_dir=cfg.data_root_dir,
+        dataset_task_cfg=train_set,
+        eval_dataset_task_cfg=val_set,
     )
     data_training_args = a2d_cfg.DataTrainingArguments(force_image_size=224)
     ActionSpacePadder = a2d_cfg.ActionSpacePadderArguments()
@@ -246,19 +198,44 @@ def get_policy(cfg: GenerateConfig) -> None:
         debug_one_episode=True,
     )
 
-    return policy, vla_dataset, cfg
+    return policy, vla_dataset
 
 
-policy, dataset, cfg = get_policy()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="OpenLoop Config")
+    
+    # argparse
+    parser.add_argument("--pretrained_checkpoint", type=str, default="checkpoints/finetuned", help="Path to univla model ckpt")
+    parser.add_argument("--action_decoder_path", type=str, default="", help="Path to ADR")
+    parser.add_argument("--data_root_dir", type=str, default="", help="Path to dataset")
+    parser.add_argument("--meta_json_dir", type=str, default="", help="Path to dataset meta json")
+    parser.add_argument("--window_size", type=int, default=30, help="Window size")
+    parser.add_argument("--debug", action="store_true", help="Debug mode")
+    parser.add_argument("--decoder_n_layers", type=int, default=2, help="Number of decoder layers")
+    parser.add_argument("--decoder_hidden_dim", type=int, default=1024, help="Decoder hidden dimension")
+    parser.add_argument("--with_proprio", action="store_true", help="Whether to use proprioceptive data")
+    parser.add_argument("--wogripper", action="store_true", help="Whether to not use proprioceptive gripper data")
+    parser.add_argument("--save_path", type=str, default="", help="Path to output openloop fig")
+    parser.add_argument("--task_ids", nargs='+', type=int, default=[1], help="List of task IDs")
+    parser.add_argument("--load_in_8bit", action="store_true", help="Whether to 8-bit quantize VLA")
+    parser.add_argument("--load_in_4bit", action="store_true", help="Whether to 4-bit quantize VLA")
+    parser.add_argument("--center_crop", action="store_true", help="Whether to sue center crop")
+    parser.add_argument("--n_layers", type=int, default=2, help="decoder layers num")
+    parser.add_argument("--hidden_dim", type=int, default=1024, help="decoder hidden dim")
+    parser.add_argument("--balancing_factor", type=int, default=0.01, help="balancing_factor")
 
-mse = calc_mse_for_single_trajectory(
-    policy,
-    dataset,
-    cfg,
-    traj_id=0,
-    steps=1000,
-    action_horizon=30,
-    plot=True
-)
+    args = parser.parse_args()
 
-print("MSE loss for trajectory 0:", mse)
+    policy, dataset = get_policy(args)
+
+    mse = calc_mse_for_single_trajectory(
+        policy,
+        dataset,
+        args,
+        traj_id=0,
+        steps=740,
+        action_horizon=30,
+        plot=True
+    )
+
+    print("MSE loss for trajectory 0:", mse)
