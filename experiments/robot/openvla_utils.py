@@ -8,11 +8,19 @@ import numpy as np
 import tensorflow as tf
 import torch
 from PIL import Image
-from transformers import AutoConfig, AutoImageProcessor, AutoModelForVision2Seq, AutoProcessor
+from transformers import (
+    AutoConfig,
+    AutoImageProcessor,
+    AutoModelForVision2Seq,
+    AutoProcessor,
+)
 
 from prismatic.extern.hf.configuration_prismatic import OpenVLAConfig
 from prismatic.extern.hf.modeling_prismatic import OpenVLAForActionPrediction
-from prismatic.extern.hf.processing_prismatic import PrismaticImageProcessor, PrismaticProcessor
+from prismatic.extern.hf.processing_prismatic import (
+    PrismaticImageProcessor,
+    PrismaticProcessor,
+)
 
 # Initialize important constants and pretty-printing mode in NumPy.
 ACTION_DIM = 7
@@ -51,7 +59,9 @@ def get_vla(cfg):
     )
 
     # Load dataset stats used during finetuning (for action un-normalization).
-    dataset_statistics_path = os.path.join(cfg.pretrained_checkpoint, "dataset_statistics.json")
+    dataset_statistics_path = os.path.join(
+        cfg.pretrained_checkpoint, "dataset_statistics.json"
+    )
     if os.path.isfile(dataset_statistics_path):
         with open(dataset_statistics_path, "r") as f:
             norm_stats = json.load(f)
@@ -68,7 +78,9 @@ def get_vla(cfg):
 
 def get_processor(cfg):
     """Get VLA model's Hugging Face processor."""
-    processor = AutoProcessor.from_pretrained(cfg.pretrained_checkpoint, trust_remote_code=True)
+    processor = AutoProcessor.from_pretrained(
+        cfg.pretrained_checkpoint, trust_remote_code=True
+    )
     return processor
 
 
@@ -92,8 +104,12 @@ def crop_and_resize(image, crop_scale, batch_size):
         expanded_dims = True
 
     # Get height and width of crop
-    new_heights = tf.reshape(tf.clip_by_value(tf.sqrt(crop_scale), 0, 1), shape=(batch_size,))
-    new_widths = tf.reshape(tf.clip_by_value(tf.sqrt(crop_scale), 0, 1), shape=(batch_size,))
+    new_heights = tf.reshape(
+        tf.clip_by_value(tf.sqrt(crop_scale), 0, 1), shape=(batch_size,)
+    )
+    new_widths = tf.reshape(
+        tf.clip_by_value(tf.sqrt(crop_scale), 0, 1), shape=(batch_size,)
+    )
 
     # Get bounding box representing crop
     height_offsets = (1 - new_heights) / 2
@@ -109,7 +125,9 @@ def crop_and_resize(image, crop_scale, batch_size):
     )
 
     # Crop and then resize back up
-    image = tf.image.crop_and_resize(image, bounding_boxes, tf.range(batch_size), (224, 224))
+    image = tf.image.crop_and_resize(
+        image, bounding_boxes, tf.range(batch_size), (224, 224)
+    )
 
     # Convert back to 3D Tensor (H, W, C)
     if expanded_dims:
@@ -118,7 +136,9 @@ def crop_and_resize(image, crop_scale, batch_size):
     return image
 
 
-def get_vla_action(vla, processor, base_vla_name, obs, task_label, unnorm_key, center_crop=False):
+def get_vla_action(
+    vla, processor, base_vla_name, obs, task_label, unnorm_key, center_crop=False
+):
     """Generates an action with the VLA policy."""
     image = Image.fromarray(obs["full_image"])
     image = image.convert("RGB")
@@ -150,9 +170,7 @@ def get_vla_action(vla, processor, base_vla_name, obs, task_label, unnorm_key, c
 
     # Build VLA prompt
     if "openvla-v01" in base_vla_name:  # OpenVLA v0.1
-        prompt = (
-            f"{OPENVLA_V01_SYSTEM_PROMPT} USER: What action should the robot take to {task_label.lower()}? ASSISTANT:"
-        )
+        prompt = f"{OPENVLA_V01_SYSTEM_PROMPT} USER: What action should the robot take to {task_label.lower()}? ASSISTANT:"
     else:  # OpenVLA
         prompt = f"In: What action should the robot take to {task_label.lower()}?\nOut:"
 
@@ -160,16 +178,20 @@ def get_vla_action(vla, processor, base_vla_name, obs, task_label, unnorm_key, c
     inputs = processor(prompt, image).to(DEVICE, dtype=torch.bfloat16)
 
     # Get action.
-    action = vla.predict_action(**inputs, unnorm_key=unnorm_key, do_sample=True, top_p=0.75)
+    action = vla.predict_action(
+        **inputs, unnorm_key=unnorm_key, do_sample=True, top_p=0.75
+    )
     return action
 
 
-def get_vla_latent_action(vla, processor, base_vla_name, obs, task_label, center_crop=False, hist_action=''):
+def get_vla_latent_action(
+    vla, processor, base_vla_name, obs, task_label, center_crop=False, hist_action=""
+):
     """Generates an action with the VLA policy."""
     img_h = Image.fromarray(obs["img_h"])
     img_l = Image.fromarray(obs["img_l"])
     img_r = Image.fromarray(obs["img_r"])
-    
+
     img_h = img_h.convert("RGB")
     img_l = img_l.convert("RGB")
     img_r = img_r.convert("RGB")
@@ -204,7 +226,7 @@ def get_vla_latent_action(vla, processor, base_vla_name, obs, task_label, center
         img_l = tf.image.convert_image_dtype(img_l, orig_dtype, saturate=True)
         img_r = tf.clip_by_value(img_r, 0, 1)
         img_r = tf.image.convert_image_dtype(img_r, orig_dtype, saturate=True)
-        
+
         # Convert back to PIL Image
         img_h = Image.fromarray(img_h.numpy())
         img_h = img_h.convert("RGB")
@@ -212,15 +234,13 @@ def get_vla_latent_action(vla, processor, base_vla_name, obs, task_label, center
         img_l = img_l.convert("RGB")
         img_r = Image.fromarray(img_r.numpy())
         img_r = img_r.convert("RGB")
-        
+
     # Build VLA prompt
     if "openvla-v01" in base_vla_name:  # OpenVLA v0.1
-        prompt = (
-            f"{OPENVLA_V01_SYSTEM_PROMPT} USER: What action should the robot take to {task_label.lower()}? ASSISTANT:"
-        )
+        prompt = f"{OPENVLA_V01_SYSTEM_PROMPT} USER: What action should the robot take to {task_label.lower()}? ASSISTANT:"
     else:  # OpenVLA
         prompt = f"In: What action should the robot take to {task_label.lower()}?\nOut:"
-    
+
     if len(hist_action) > 0:
         prompt = f"In: What action should the robot take to {task_label.lower()}? History action {hist_action}\nOut:"
 
@@ -228,6 +248,8 @@ def get_vla_latent_action(vla, processor, base_vla_name, obs, task_label, center
     inputs = processor(prompt, img_h, img_l, img_r).to(vla.device, dtype=torch.bfloat16)
 
     # Get latent action.
-    action = vla.predict_latent_action(**inputs, do_sample=True, temperature=0.75, top_p = 0.9)
+    action = vla.predict_latent_action(
+        **inputs, do_sample=True, temperature=0.75, top_p=0.9
+    )
 
     return action
