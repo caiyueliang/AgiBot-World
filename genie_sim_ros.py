@@ -15,6 +15,7 @@ from collections import deque
 import threading
 
 import numpy as np
+
 QOS_PROFILE_LATEST = QoSProfile(
     history=QoSHistoryPolicy.KEEP_LAST,
     depth=30,
@@ -33,7 +34,7 @@ class SimROSNode(Node):
         # publish
         self.pub_joint_command = self.create_publisher(
             JointState,
-            "/joint_command",
+            "/sim/target_joint_state",
             QOS_PROFILE_LATEST,
         )
 
@@ -67,7 +68,6 @@ class SimROSNode(Node):
         )
 
         # msg
-        # self.lock = threading.Lock()
         self.lock_img_head = threading.Lock()
         self.lock_img_left_wrist = threading.Lock()
         self.lock_img_right_wrist = threading.Lock()
@@ -152,7 +152,6 @@ class SimROSNode(Node):
 
         self.pub_joint_command.publish(cmd_msg)
 
-
     def callback_joint_state(self, msg):
         # print(msg.header)
         self.cur_joint_state = msg
@@ -166,9 +165,6 @@ class SimROSNode(Node):
         msg_remap.name = []
         msg_remap.velocity = []
         msg_remap.effort = []
-
-        # fmt: off
-        gripper_control_joints = self.robot_cfg["gripper"]["gripper_control_joint"]
         msg_remap.position.append(joint_name_state_dict["idx21_arm_l_joint1"])
         msg_remap.position.append(joint_name_state_dict["idx22_arm_l_joint2"])
         msg_remap.position.append(joint_name_state_dict["idx23_arm_l_joint3"])
@@ -195,3 +191,4 @@ class SimROSNode(Node):
     def get_joint_state(self):
         with self.lock_joint_state:
             return self.obs_joint_state
+
