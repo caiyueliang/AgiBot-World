@@ -163,14 +163,14 @@ class ActionDecoderWrapper(nn.Module):
 
                 for action in pred_action[0]:
 
-                    if action[-1] < 0.5:
+                    if action[-1] < 0.25:
                         action[-1] = 0
-                    elif action[-1] > 0.5:
+                    elif action[-1] > 0.25:
                         action[-1] = 1
 
-                    if action[7] < 0.5:
+                    if action[7] < 0.25:
                         action[7] = 0
-                    elif action[7] > 0.5:
+                    elif action[7] > 0.25:
                         action[7] = 1
 
                     self.action_queue.put(action)
@@ -200,14 +200,14 @@ class ActionDecoderWrapper(nn.Module):
                     axis=0,
                 ) / np.sum(self.action_buffer_mask[:, 0:1] * self.temporal_weights)
 
-                if action[-1] < 0.5:
+                if action[-1] < 0.25:
                     action[-1] = 0
-                elif action[-1] > 0.5:
+                elif action[-1] > 0.25:
                     action[-1] = 1
 
-                if action[7] < 0.5:
+                if action[7] < 0.25:
                     action[7] = 0
-                elif action[7] > 0.5:
+                elif action[7] > 0.25:
                     action[7] = 1
 
         return action
