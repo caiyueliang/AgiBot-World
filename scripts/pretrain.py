@@ -25,7 +25,6 @@ from transformers import (
     AutoProcessor, 
     AutoConfig, 
     AutoImageProcessor,
-    AutoTokenizer,
 )
 # Sane Defaults
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -221,7 +220,7 @@ def train(cfg: TrainConfig) -> None:
     AutoConfig.register("openvla", OpenVLAConfig)
     AutoImageProcessor.register(OpenVLAConfig, PrismaticImageProcessor)
     AutoProcessor.register(OpenVLAConfig, PrismaticProcessor)
-    processor = AutoProcessor.from_pretrained("/mnt/public/zhoupengfei/univla_ckpts/univla-7b", trust_remote_code=True)
+    processor = AutoProcessor.from_pretrained("univla-7b", trust_remote_code=True)
     
     # Load gensim dataset
     from prismatic.vla.datasets import A2dDataset
@@ -231,14 +230,6 @@ def train(cfg: TrainConfig) -> None:
     )
     data_training_args = a2d_cfg.DataTrainingArguments(force_image_size=224)
     ActionSpacePadder = a2d_cfg.ActionSpacePadderArguments()
-
-    text_tokenizer = AutoTokenizer.from_pretrained(
-        "InternVL2-2B",
-        trust_remote_code=True,
-        add_eos_token=False,
-    )
-
-    text_tokenizer.model_max_length = 4096
 
     vla_dataset = A2dDataset(
         # base parmas
@@ -250,7 +241,6 @@ def train(cfg: TrainConfig) -> None:
         sample_rate=dataset_args.train_sample_rate, 
         online_process_mp_cnt=dataset_args.online_process_mp_cnt, 
         # a2d params
-        text_tokenizer=text_tokenizer, 
         num_image_token=int((dataset_args.force_image_size // 14) ** 2 * (0.5**2)), 
         is_train=True, 
         image_size=data_training_args.force_image_size, 

@@ -15,7 +15,7 @@ class UniformAction:
     RIGHT_ARM_JOINT_POSITIONS = ("right_arm_joint_positions", 7)  # 0:shoulder  6:hand
     RIGHT_END_EFFECTOR_6D_POSE = ("right_end_effector_6d_pose", 6)
     RIGHT_GRIPPER_JOINT_POSITIONS = ("right_gripper_joint_positions", 1)
-    RIGHT_DEXTEROUS_HAND_POSITIONS = ("right_dexterous_hand_positions", 6)  # 灵巧手
+    RIGHT_DEXTEROUS_HAND_POSITIONS = ("right_dexterous_hand_positions", 6)  # dexhand
     RIGHT_ARM_JOINT_VELOCITIES = ("right_arm_joint_velocities", 7)
     RIGHT_GRIPPER_JOINT_VELOCITIES = ("right_gripper_joint_velocities", 5)
     RIGHT_END_EFFECTOR_POSITIONS = ("right_end_effector_positions", 3)
@@ -25,7 +25,7 @@ class UniformAction:
     LEFT_ARM_JOINT_POSITIONS = ("left_arm_joint_positions", 7)
     LEFT_END_EFFECTOR_6D_POSE = ("left_end_effector_6d_pose", 6)
     LEFT_GRIPPER_JOINT_POSITIONS = ("left_gripper_joint_positions", 1)
-    LEFT_DEXTEROUS_HAND_POSITIONS = ("left_dexterous_hand_positions", 6)  # 灵巧手
+    LEFT_DEXTEROUS_HAND_POSITIONS = ("left_dexterous_hand_positions", 6)  # dexhand
     LEFT_ARM_JOINT_VELOCITIES = ("left_arm_joint_velocities", 7)
     LEFT_GRIPPER_JOINT_VELOCITIES = ("left_gripper_joint_velocities", 5)
     LEFT_END_EFFECTOR_POSITIONS = ("left_end_effector_positions", 3)

@@ -5,7 +5,6 @@ sys.path.append(str(Path(__file__).parent.parent))
 import argparse
 from collections import deque
 from torch.utils.tensorboard import SummaryWriter
-import draccus
 import torch
 import torch.nn as nn
 import torch.distributed as dist
@@ -22,12 +21,10 @@ from transformers import (
     BitsAndBytesConfig, 
     AutoConfig, 
     AutoImageProcessor,
-    AutoTokenizer,
 )
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
 import wandb
-import numpy as np
 from prismatic.models.backbones.llm.prompting import PurePromptBuilder
 from prismatic.extern.hf.configuration_prismatic import OpenVLAConfig
 from prismatic.extern.hf.modeling_prismatic import OpenVLAForActionPrediction
@@ -268,7 +265,7 @@ def finetune(cfg):
         vla = get_peft_model(vla, lora_config)
         vla.print_trainable_parameters()
 
-    dual_system = Wrapped_Model(
+    model = Wrapped_Model(
         vla = vla,
         freeze_vla=cfg.freeze_vla,
         window_size=cfg.window_size,
@@ -279,11 +276,11 @@ def finetune(cfg):
         decoupled_loss=cfg.decouple,
         ).to(device_id)
 
-    trainable_total_params = sum(p.numel() for p in dual_system.parameters() if p.requires_grad)
+    trainable_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print('Total Trainable Params: ', trainable_total_params)
     
     # Create Optimizer =>> note that we default to a simple constant learning rate!
-    trainable_params = [param for param in dual_system.parameters() if param.requires_grad]
+    trainable_params = [param for param in model.parameters() if param.requires_grad]
     optimizer = AdamW(trainable_params, lr=cfg.learning_rate, weight_decay=1e-3)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = int(cfg.max_steps * 8 * 0.8), gamma=0.1)
 
@@ -331,14 +328,6 @@ def finetune(cfg):
     data_training_args = a2d_cfg.DataTrainingArguments(force_image_size=224)
     ActionSpacePadder = a2d_cfg.ActionSpacePadderArguments()
 
-    text_tokenizer = AutoTokenizer.from_pretrained(
-        "InternVL2-2B",
-        trust_remote_code=True,
-        add_eos_token=False,
-    )
-
-    text_tokenizer.model_max_length = 4096
-
     vla_dataset = A2dDataset(
         # base parmas
         label_file_dir=dataset_args.meta_json_dir, 
@@ -349,7 +338,6 @@ def finetune(cfg):
         sample_rate=dataset_args.train_sample_rate, 
         online_process_mp_cnt=dataset_args.online_process_mp_cnt, 
         # a2d params
-        text_tokenizer=text_tokenizer, 
         num_image_token=int((dataset_args.force_image_size // 14) ** 2 * (0.5**2)), 
         is_train=True, 
         image_size=data_training_args.force_image_size, 
@@ -392,8 +380,8 @@ def finetune(cfg):
         num_workers=64,
     )
     
-    dual_system, latent_action_model, optimizer, scheduler, dataloader = accelerator.prepare(
-        dual_system, latent_action_model, optimizer, scheduler, dataloader
+    model, latent_action_model, optimizer, scheduler, dataloader = accelerator.prepare(
+        model, latent_action_model, optimizer, scheduler, dataloader
     )
 
     # Initialize Logging =>> W&B
@@ -407,11 +395,11 @@ def finetune(cfg):
 
     # Train!
     with tqdm.tqdm(total=cfg.max_steps, leave=False) as progress:
-        dual_system.train()
+        model.train()
         optimizer.zero_grad()
         current_step = 0
         if distributed_state.is_main_process:
-            # 创建一个 SummaryWriter 实例
+            # summary writter
             writer = SummaryWriter(log_dir=cfg.run_root_dir)
                 
         for e in range(10000):
@@ -535,16 +523,16 @@ def finetune(cfg):
                 batch["attention_mask"] = attention_mask
                 batch["labels"] = labels
 
-                output, act_loss, loss_one_step, latent_action_proj = dual_system(batch)
+                output, act_loss, loss_one_step, latent_action_proj = model(batch)
                 loss = act_loss if cfg.freeze_vla else act_loss + (output.loss) * cfg.lam_loss_weight
                 normalized_loss = loss / cfg.grad_accumulation_steps
 
-                torch.nn.utils.clip_grad_norm_(dual_system.parameters(), max_norm=0.3)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.3)
                 # Backward pass
                 normalized_loss.backward()
 
                 # Compute Accuracy and L1 Loss for Logging
-                action_logits = output.logits[:, dual_system.module.vla.vision_backbone.featurizer.patch_embed.num_patches : -1]
+                action_logits = output.logits[:, model.module.vla.vision_backbone.featurizer.patch_embed.num_patches : -1]
                 action_preds = action_logits.argmax(dim=2)
                 action_gt = batch["labels"][:, 1:].to(action_preds.device)
                 mask = action_gt > 32000
@@ -584,7 +572,7 @@ def finetune(cfg):
 
                 # Initialize Logging =>> TensorBoard
                 if distributed_state.is_main_process:
-                    # 使用 add_scalar 方法记录日志
+                    # add_scalar
                     writer.add_scalar('train_loss', smoothened_loss, gradient_step_idx + current_step)
                     writer.add_scalar('latent_action_accuracy', smoothened_action_accuracy, gradient_step_idx + current_step)
                     writer.add_scalar('action_loss', act_loss.item(), gradient_step_idx + current_step)
@@ -610,10 +598,10 @@ def finetune(cfg):
                         # Save Processor & Weights
                         # if not cfg.freeze_vla:
                         processor.save_pretrained(run_dir)
-                        dual_system.module.vla.save_pretrained(save_dir)
+                        model.module.vla.save_pretrained(save_dir)
 
                         # Save low-level policy
-                        torch.save(dual_system.module.action_decoder.state_dict(), str(run_dir) + f'/action_decoder.pt')
+                        torch.save(model.module.action_decoder.state_dict(), str(run_dir) + f'/action_decoder.pt')
 
                     # Wait for processor and adapter weights to be saved by main process
                     dist.barrier()
@@ -656,7 +644,7 @@ def finetune(cfg):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Finetune Config")
     
-    # 添加命令行参数
+    # add args
     parser.add_argument("--vla_path", type=str, default="checkpoints/finetuned", help="Path to univla model ckpt")
     parser.add_argument("--lam_path", type=str, default="checkpoints/lam-stage-2.ckpt", help="Path to LAM model ckpt")
     parser.add_argument("--data_root_dir", type=str, default="", help="Path to dataset")

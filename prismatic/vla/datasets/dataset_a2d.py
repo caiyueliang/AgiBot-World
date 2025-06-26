@@ -15,78 +15,18 @@ import numpy as np
 import torch
 import torch.distributed as dist
 import torchvision
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from tqdm import tqdm
 from transformers.trainer_pt_utils import LabelSmoother
 from transformers.utils import logging
 logging.set_verbosity_info()
-
-import argparse
-from transformers import AutoTokenizer
-import prismatic.vla.datasets.pretrainAe_a2d_pretrain_v6 as cfg 
 from prismatic.vla.datasets.dataset_transforms import PipelineComposer
 from prismatic.vla.datasets.dataset_transforms import build_latent_image_transform
-from internvl_chat.internvl.train.constants import (
-    BOX_END_TOKEN,
-    BOX_START_TOKEN,
-    IMG_CONTEXT_TOKEN,
-    IMG_END_TOKEN,
-    IMG_START_TOKEN,
-    QUAD_END_TOKEN,
-    QUAD_START_TOKEN,
-    REF_END_TOKEN,
-    REF_START_TOKEN,
-)
 from internvl_chat.internvl.train.dataset import build_transform, dynamic_preprocess
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 logger = logging.get_logger("transformers.dataset_jaka" + __name__)
 IGNORE_TOKEN_ID = LabelSmoother.ignore_index
-
-
-def concat_pad_data_collator_pi0(features, max_item_length=None, pad_id=0):
-    first = features[0]
-    batch = {}
-
-    batch_lens = [feat["input_ids"].shape for feat in features]
-    max_item_length = max_item_length or max(batch_lens)[0]
-
-    for i in range(len(features)):
-        feat = features[i]
-
-        temp_input_ids = torch.LongTensor([pad_id] * max_item_length)
-        temp_input_ids[: feat["input_ids"].shape[0]] = feat["input_ids"]
-        feat["input_ids"] = temp_input_ids
-        feat["attention_mask"] = feat["input_ids"].ne(pad_id)
-
-        if "position_ids" in feat:
-            temp_position_ids = torch.LongTensor([pad_id] * max_item_length)
-            temp_position_ids[: feat["position_ids"].shape[0]] = feat["position_ids"]
-            feat["position_ids"] = temp_position_ids
-
-    # Handling of all other possible keys.
-    for k, v in first.items():
-        if (
-            k not in ["labels", "label_ids", "pixel_values", "depth_values", "image_flags"]
-            and v is not None
-            and not isinstance(v, str)
-        ):
-            if isinstance(v, torch.Tensor):
-                batch[k] = torch.stack([f[k] for f in features])
-            elif isinstance(v, np.ndarray):
-                batch[k] = torch.tensor(np.stack([f[k] for f in features]))
-            else:
-                batch[k] = torch.tensor([f[k] for f in features])
-
-        if k in ["pixel_values", "depth_values", "image_flags", "videos"]:
-            if isinstance(v, torch.Tensor):
-                batch[k] = torch.concat([f[k] for f in features])
-            elif isinstance(v, np.ndarray):
-                batch[k] = torch.concat(np.stack([f[k] for f in features]))
-            else:
-                batch[k] = torch.concat([f[k] for f in features])
-
-    return batch
 
 
 def timer(vis=True):
@@ -360,9 +300,6 @@ class BaseDataset(MetaDataset):
 class A2dDataset(BaseDataset):
     def __init__(
         self,
-        # internvl language related args
-        text_tokenizer,
-        # internvl vision related args
         num_image_token,
         is_train=True,
         image_size=448,
@@ -372,7 +309,6 @@ class A2dDataset(BaseDataset):
         min_dynamic_patch=1,
         max_dynamic_patch=12,
         normalize_type="imagenet",
-        # action expert related args
         action_chunk_size=30,
         use_real_state=False,
         conversation_type=0,
@@ -392,7 +328,6 @@ class A2dDataset(BaseDataset):
         logger.info(f"[Dataset] use_thumbnail: {use_thumbnail}")
         logger.info(f"[Dataset] min_dynamic_patch: {min_dynamic_patch}, max_dynamic_patch: {max_dynamic_patch}")
 
-        self.text_tokenizer = text_tokenizer
         self.image_size = image_size
         self.is_train = is_train
         self.pad2square = pad2square
@@ -631,98 +566,3 @@ def setup_distributed():
     torch.cuda.set_device(local_rank)
 
     return local_rank, world_size
-
-
-if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--debug", action="store_true", help="Whether using debug mode to dump data into pickle")
-    parser.add_argument("--vis_frame", action="store_true", help="Whether visualizing image")
-    parser.add_argument("--vis_dir", type=str, default="Data/Images", help="The dictionary to save images")
-    parser.add_argument("--video_dir", type=str, default="Data/Videos", help="The dictionary to save videos")
-    parser.add_argument("--statistic", action="store_true", help="Whether to statistic data")
-
-    args = parser.parse_args()
-    text_tokenizer = AutoTokenizer.from_pretrained(
-        "InternVL2-2B",
-        trust_remote_code=True,
-        add_eos_token=False,
-    )
-
-    text_tokenizer.model_max_length = 4096
-    token_list = [
-        IMG_START_TOKEN,
-        IMG_END_TOKEN,
-        IMG_CONTEXT_TOKEN,
-        QUAD_START_TOKEN,
-        QUAD_END_TOKEN,
-        REF_START_TOKEN,
-        REF_END_TOKEN,
-        BOX_START_TOKEN,
-        BOX_END_TOKEN,
-    ]
-    num_new_tokens = text_tokenizer.add_tokens(token_list, special_tokens=True)
-
-    setup_distributed()
-    dataset_args = cfg.DatasetArguments()
-    data_training_args = cfg.DataTrainingArguments(force_image_size=224)
-    ActionSpacePadder = cfg.ActionSpacePadderArguments()
-
-    args.debug = False
-    if args.debug:
-        ds = BaseDataset(
-            label_file_dir=dataset_args.meta_json_dir,
-            data_root_dir=dataset_args.data_root_dir,
-            world_size=None,
-            rank_id=None,
-            sample_rate=None,
-            online_process_mp_cnt=1,
-        )
-    else:
-        ds = A2dDataset(
-            # base parmas
-            label_file_dir=dataset_args.meta_json_dir, 
-            data_root_dir=dataset_args.data_root_dir, 
-            valid_episode_txt=dataset_args.valid_episode_txt, 
-            world_size=dist.get_world_size(), 
-            rank_id=dist.get_rank(), 
-            sample_rate=dataset_args.train_sample_rate, 
-            online_process_mp_cnt=dataset_args.online_process_mp_cnt, 
-            # a2d params
-            text_tokenizer=text_tokenizer, 
-            num_image_token=int((dataset_args.force_image_size // 14) ** 2 * (0.5**2)), 
-            is_train=True, 
-            image_size=data_training_args.force_image_size, 
-            pad2square=data_training_args.pad2square, 
-            dynamic_image_size=data_training_args.dynamic_image_size, 
-            use_thumbnail=data_training_args.use_thumbnail, 
-            min_dynamic_patch=data_training_args.min_dynamic_patch, 
-            max_dynamic_patch=data_training_args.max_dynamic_patch, 
-            normalize_type=data_training_args.normalize_type, 
-            action_chunk_size=data_training_args.action_chunk_size, 
-            use_real_state=data_training_args.use_real_state, 
-            conversation_type=data_training_args.conversation_type, 
-            vis_frame=args.vis_frame, 
-            vis_dir=args.vis_dir, 
-            ActionSpacePadder=ActionSpacePadder, 
-        )
-    ds.generate_task_infos(
-        dataset_args.dataset_task_cfg,
-        task_episode_processors_cfg=dataset_args.episode_processors,
-        task_dataset_processors_cfg=dataset_args.dataset_processors,
-        task_runtime_processors_cfg=dataset_args.runtime_processors,
-        shuffle=True,
-        statistic=args.statistic,
-        debug_one_episode=True,
-    )
-    dataloader = DataLoader(
-        ds,
-        batch_size=1, 
-        num_workers=12, 
-        shuffle=True,
-        collate_fn=concat_pad_data_collator_pi0,
-    )
-    visualized_tensor = []
-    for batch_data in tqdm(dataloader):
-        data = batch_data
-        print(len(batch_data))

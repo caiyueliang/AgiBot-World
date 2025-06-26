@@ -13,9 +13,6 @@ import matplotlib.pyplot as plt
 from prismatic.extern.hf.configuration_prismatic import OpenVLAConfig
 from prismatic.extern.hf.processing_prismatic import PrismaticProcessor
 import torch.distributed as dist
-# Sane Defaults
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-from transformers import AutoTokenizer
 import prismatic.vla.datasets.pretrainAe_a2d_pretrain_v6 as a2d_cfg
 from experiments.robot.geniesim.genie_model import WrappedGenieEvaluation, WrappedModel
 
@@ -145,14 +142,6 @@ def get_policy(cfg):
     data_training_args = a2d_cfg.DataTrainingArguments(force_image_size=224)
     ActionSpacePadder = a2d_cfg.ActionSpacePadderArguments()
 
-    text_tokenizer = AutoTokenizer.from_pretrained(
-        "InternVL2-2B",
-        trust_remote_code=True,
-        add_eos_token=False,
-    )
-
-    text_tokenizer.model_max_length = 4096
-
     AutoProcessor.register(OpenVLAConfig, PrismaticProcessor)
     processor = AutoProcessor.from_pretrained(cfg.pretrained_checkpoint, trust_remote_code=True)
 
@@ -166,7 +155,6 @@ def get_policy(cfg):
         sample_rate=dataset_args.train_sample_rate, 
         online_process_mp_cnt=dataset_args.online_process_mp_cnt, 
         # a2d params
-        text_tokenizer=text_tokenizer, 
         num_image_token=int((dataset_args.force_image_size // 14) ** 2 * (0.5**2)), 
         is_train=True, 
         image_size=data_training_args.force_image_size, 
