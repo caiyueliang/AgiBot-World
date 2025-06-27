@@ -5,9 +5,47 @@ We adopt [UniVLA](https://github.com/OpenDriveLab/UniVLA) as the baseline model 
 
 Results of baseline models. More detailed task descriptions and metric definitions can be found [here](https://agibot-world.com/challenge/manipulation/leaderboard).
 
-| Model Name | Total Score | Clear the countertop waste | Open drawer and store items | Heat the food in the microwave | Pack moving objects from conveyor | Pickup items from the freezer | Restock supermarket items | Pack in the supermarket | Make a sandwich | Clear table in the restaurant | Stamp the seal |
-|------------|------------|--------|--------|--------|--------|--------|--------|--------|--------|--------|---------|
-| UniVLA | 2.336 | 0.194 | 0 | 0.198 | 0 | 0.08 | 0.55 | 1 | 0.064 | 0.25 | 0 |
+<style>
+table {
+  table-layout: fixed;
+  width: 100%;
+  word-wrap: break-word;
+}
+td, th {
+  white-space: nowrap;
+}
+</style>
+
+<table>
+  <tr>
+    <th>Model Name</th>
+    <th>Total Score</th>
+    <th>Clear the countertop waste</th>
+    <th>Open drawer and store items</th>
+    <th>Heat the food in the microwave</th>
+    <th>Pack moving objects from conveyor</th>
+    <th>Pickup items from the freezer</th>
+    <th>Restock supermarket items</th>
+    <th>Pack in the supermarket</th>
+    <th>Make a sandwich</th>
+    <th>Clear table in the restaurant</th>
+    <th>Stamp the seal</th>
+  </tr>
+  <tr>
+    <td>UniVLA</td>
+    <td>2.336</td>
+    <td>0.194</td>
+    <td>0</td>
+    <td>0.198</td>
+    <td>0</td>
+    <td>0.08</td>
+    <td>0.55</td>
+    <td>1</td>
+    <td>0.064</td>
+    <td>0.25</td>
+    <td>0</td>
+  </tr>
+</table>
 
 ## :video_game: Setup <a name="installation"></a>
 
