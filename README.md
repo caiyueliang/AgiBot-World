@@ -1,7 +1,13 @@
 # Manipulation Baseline
 We adopt [UniVLA](https://github.com/OpenDriveLab/UniVLA) as the baseline model for the [AgiBot World Challenge @ IROS 2025](https://agibot-world.com/challenge) - Manipulation track.
 
-This repo provides a minimal version of training code.
+## :trophy: Leaderboard
+
+Results of baseline models. More detailed task descriptions and metric definitions can be found [here](https://agibot-world.com/challenge/manipulation/leaderboard).
+
+| Model Name | Total Score | Clear the countertop waste | Open drawer and store items | Heat the food in the microwave | Pack moving objects from conveyor | Pickup items from the freezer | Restock supermarket items | Pack in the supermarket | Make a sandwich | Clear table in the restaurant | Stamp the seal |
+|------------|------------|--------|--------|--------|--------|--------|--------|--------|--------|--------|---------|
+| UniVLA | 2.336 | 0.194 | 0 | 0.198 | 0 | 0.08 | 0.55 | 1 | 0.064 | 0.25 | 0 |
 
 ## :video_game: Setup <a name="installation"></a>
 
