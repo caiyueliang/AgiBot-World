@@ -36,6 +36,26 @@ Results of baseline models. More detailed task descriptions and metric definitio
   </tr>
 </table>
 
+## 🤗 Model Card
+
+<table>
+  <tr>
+    <th>Model Name</th>
+    <th>Backbone</th>
+    <th>HF Path</th>
+    <th>Note</th>
+  </tr>
+
+  <tr>
+    <td>univla-iros-manipulation-challenge-baseline</td>
+    <td><a href="https://huggingface.co/qwbu/univla-7b">UniVLA-7b</a></td>
+    <td><a href="https://huggingface.co/qwbu/univla-iros-manipulation-challenge-baseline">univla-iros-manipulation-challenge-baseline </a></td>
+    <td> Our baseline model trained collectively on all challenge tasks. </td>
+  </tr>
+
+</table>
+
+
 ## :video_game: Setup <a name="installation"></a>
 
 1. (Optional) We use conda to manage the environment.
@@ -147,7 +167,7 @@ omni_python scripts/infer.py
 ## :pushpin: TODO list
 -  [x] Training code and dataloader for challenge dataset.
 -  [x] Evaluation code.
--  [ ] Finetuned UniVLA checkpoints on challenge simdata.
+-  [x] Finetuned UniVLA checkpoints on challenge simdata.
 -  [ ] Updated simulation environment.
 -  [ ] Finetuned RDT checkpoints on challenge simdata.
 
