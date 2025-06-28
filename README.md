@@ -5,7 +5,7 @@ We adopt [UniVLA](https://github.com/OpenDriveLab/UniVLA) as the baseline model 
 
 Results of baseline models. More detailed task descriptions and metric definitions can be found [here](https://agibot-world.com/challenge/manipulation/leaderboard).
 
-<table border="1">
+<table border="0">
   <tr>
     <th>Model Name</th>
     <th>Total Score</th>
