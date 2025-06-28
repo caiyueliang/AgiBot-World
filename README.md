@@ -51,9 +51,6 @@ pip install "flash-attn==2.5.5" --no-build-isolation
 ### :three: Dataset Directory Structure
 The dataset directory structure is organized as follows:
 
-# Dataset Directory Structure
-
-You can organize dataset directory structure as follows:
 ```
 dataset
 ├── 2810051
@@ -114,7 +111,7 @@ scripts/finetune_genie.py \
 
 Once you finished training and get the action decoder and VLA backbone, you can simply start the evaluation with:
 
-## Evaluation
+## :clipboard: Evaluation
 ```bash
 omni_python scripts/infer.py
 ```
