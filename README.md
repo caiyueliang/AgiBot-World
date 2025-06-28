@@ -111,7 +111,7 @@ scripts/finetune_genie.py \
 
 Once you finished training and get the action decoder and VLA backbone, you can simply start the evaluation with:
 
-## :memo: Evaluation
+## :chart_with_upwards_trend: Evaluation
 ```bash
 omni_python scripts/infer.py
 ```
