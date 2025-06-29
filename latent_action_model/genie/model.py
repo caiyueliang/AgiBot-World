@@ -72,6 +72,7 @@ class DINO_LAM(LightningModule):
                     stage1_ckpt[key.replace("lam.", "")] = lam_ckpt[key]
             self.lam.load_state_dict(stage1_ckpt, strict=False)
 
+
         self.lam_num_latents = lam_num_latents
         self.vq_beta = vq_beta
         self.log_interval = log_interval
