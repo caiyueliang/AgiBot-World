@@ -168,7 +168,7 @@ omni_python scripts/infer.py
 -  [x] Training code and dataloader for challenge dataset.
 -  [x] Evaluation code.
 -  [x] Finetuned UniVLA checkpoints on challenge simdata.
--  [ ] Updated simulation environment.
+-  [x] Updated simulation environment.
 -  [ ] Finetuned RDT checkpoints on challenge simdata.
 
 ## :pencil: Citation
