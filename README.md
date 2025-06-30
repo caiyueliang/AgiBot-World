@@ -135,7 +135,7 @@ torchrun \
 --standalone \
 --nnodes 1 \
 --nproc-per-node 8 \
-scripts/finetune_genie.py \
+scripts/finetune.py \
 --vla_path univla-7b \
 --lam_path univla-latent-action-model \
 --data_root_dir dataset \
