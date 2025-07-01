@@ -71,7 +71,6 @@ Results of baseline models. More detailed task descriptions and metric definitio
     <td>rdt-iros-manipulation-challenge-baseline</td>
     <td>TBD</td>
     <td>TBD</td>
-ine </a></td>
     <td> Pretrained on AgibotWorld dataset. Finetuned collectively on all challenge tasks. </td>
   </tr>
 
