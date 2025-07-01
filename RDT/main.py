@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 from train.train import train
-
+import argparse
 from accelerate.logging import get_logger
 
 
