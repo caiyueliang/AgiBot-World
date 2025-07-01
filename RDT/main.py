@@ -289,7 +289,7 @@ def parse_args(input_args=None):
     )
 
     parser.add_argument(
-        "--recipe", type=str, default="all", required=False, help="Specify the data recipe for training."
+        "--recipe", type=str, default="10task", required=False, help="Specify the data recipe for training."
     )
 
     if input_args is not None:
