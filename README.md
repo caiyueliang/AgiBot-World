@@ -1,5 +1,5 @@
 # Manipulation Baseline
-We adopt [UniVLA](https://github.com/OpenDriveLab/UniVLA) and [RDT](https://github.com/thu-ml/RoboticsDiffusionTransformer) as baseline models for the [AgiBot World Challenge @ IROS 2025](https://agibot-world.com/challenge) - Manipulation track.
+We adopt [UniVLA](https://github.com/OpenDriveLab/AgiBot-World/tree/manipulation-challenge/UniVLA) and [RDT](https://github.com/OpenDriveLab/AgiBot-World/tree/manipulation-challenge/RDT) as baseline models for the [AgiBot World Challenge @ IROS 2025](https://agibot-world.com/challenge) - Manipulation track.
 
 ## :trophy: Leaderboard
 
