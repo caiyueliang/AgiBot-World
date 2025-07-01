@@ -2,7 +2,6 @@ import os
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
-import torch
 import torch.distributed as dist
 import tqdm
 import argparse

@@ -37,7 +37,6 @@ overwatch = initialize_overwatch(__name__)
 @dataclass
 class TrainConfig:
     # fmt: off
-
     # VLAConfig (`prismatic/conf/vla.py`); override with --vla.type `VLARegistry.<VLA>.vla_id`
     vla: VLAConfig = field(
         default_factory=VLAConfig.get_choice_class(VLARegistry.DINOSIGLIP_224PX_MX_BRIDGE.vla_id)

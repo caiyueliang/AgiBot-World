@@ -9,7 +9,6 @@ from typing import Union
 
 import cv2
 import numpy as np
-import json
 import draccus
 from experiments.robot.geniesim.genie_model import WrappedGenieEvaluation, WrappedModel
 

@@ -23,7 +23,6 @@ from transformers import (
     AutoImageProcessor,
 )
 from transformers.modeling_outputs import CausalLMOutputWithPast
-
 import wandb
 from prismatic.models.backbones.llm.prompting import PurePromptBuilder
 from prismatic.extern.hf.configuration_prismatic import OpenVLAConfig

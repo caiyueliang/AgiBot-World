@@ -3,7 +3,6 @@
 import json
 import os
 import time
-
 import numpy as np
 import tensorflow as tf
 import torch
@@ -23,7 +22,7 @@ from prismatic.extern.hf.processing_prismatic import (
 )
 
 # Initialize important constants and pretty-printing mode in NumPy.
-ACTION_DIM = 7
+ACTION_DIM = 16
 DATE = time.strftime("%Y_%m_%d")
 DATE_TIME = time.strftime("%Y_%m_%d-%H_%M_%S")
 DEVICE = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
