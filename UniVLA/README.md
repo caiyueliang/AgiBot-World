@@ -55,30 +55,7 @@ Results of baseline models. More detailed task descriptions and metric definitio
 
 </table>
 
-
-## :video_game: Setup <a name="installation"></a>
-
-1. (Optional) We use conda to manage the environment.
-
-```bash
-conda create -n univla python=3.10 -y
-conda activate univla
-```
-
-2. Install dependencies.
-
-```bash
-# Clone our repo and pip install to download dependencies
-git clone -b manipulation-challenge https://github.com/OpenDriveLab/AgiBot-World.git
-pip install -r requirements.txt
-
-# Install Flash Attention 2 for training (https://github.com/Dao-AILab/flash-attention)
-pip install packaging ninja
-ninja --version; echo $?  # Verify Ninja --> should return exit code "0"
-pip install "flash-attn==2.5.5" --no-build-isolation
-```
-
-## :fire: Training 
+## :U+1F5C1: Training 
 
 ### :one: Download the dataset
 
