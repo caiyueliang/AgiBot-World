@@ -1,7 +1,7 @@
 import os
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).parent.parent.parent))
+sys.path.append(str(Path(__file__).parent.parent))
 from typing import Any, Dict, Union
 import numpy as np
 import torch
@@ -64,6 +64,8 @@ class RDTInfer:
         config_path="configs/base.yaml",
         ctrl_freq: int = 30,
         task=None,
+        balancing_factor=0.01,
+        smooth=True,
     ) -> Path:
         self.task = task
         self.model_name_or_path = model_name_or_path
@@ -73,7 +75,7 @@ class RDTInfer:
         self.ctrl_freq = ctrl_freq
         self.model = make_policy(config_path, model_name_or_path, ctrl_freq)
         lang_embed_path = f"lang/{task}.pt"
-        self.text_embeds = torch.load(lang_embed_path).to(self.device)
+        self.text_embeds = torch.load(lang_embed_path).to(self.device).unsqueeze(0)
 
         if model_name_or_path.split("/")[-1].startswith("checkpoint-"):
             self.save_name = model_name_or_path.split("/")[-2]
@@ -82,6 +84,29 @@ class RDTInfer:
             self.save_name = model_name_or_path.split("/")[-1]
             self.step = "last"
 
+        self.temporal_size = int(ctrl_freq)
+        self.temporal_mask = torch.flip(
+            torch.triu(
+                torch.ones(self.temporal_size, self.temporal_size, dtype=torch.bool)
+            ),
+            dims=[1],
+        ).numpy()
+
+        self.action_buffer = np.zeros(
+            (self.temporal_mask.shape[0], self.temporal_mask.shape[0], 16)
+        )
+        self.action_buffer_mask = np.zeros(
+            (self.temporal_mask.shape[0], self.temporal_mask.shape[0]), dtype=np.bool_
+        )
+
+        # Action chunking with temporal aggregation
+        self.temporal_weights = np.array(
+            [np.exp(-1 * balancing_factor * i) for i in range(self.temporal_size)]
+        )[:, None]
+
+        self.action_queue = Queue()
+        self.smooth = smooth
+        
     def predict_action(self, payload1: Dict[str, Any], payload2: Dict[str, Any]):
         # NOTE here we expect two frames of history
         # Assume current frame t, namely paload1: t-1, paload2:t
@@ -147,8 +172,6 @@ class RDTInfer:
         img_r_2 = None
         state_2 = None
 
-        action_queue = Queue()
-
         while rclpy.ok():
             img_h_raw = sim_ros_node.get_img_head()
             img_l_raw = sim_ros_node.get_img_left_wrist()
@@ -166,7 +189,7 @@ class RDTInfer:
             ):
                 sim_time = get_sim_time(sim_ros_node)
                 if sim_time > SIM_INIT_TIME:
-                    print("cur sim time", sim_time)
+                    # print("cur sim time", sim_time)
                     img_h_1 = img_h_2
                     img_l_1 = img_l_2
                     img_r_1 = img_r_2
@@ -210,45 +233,103 @@ class RDTInfer:
                         "state_indicator": state_indicator,
                     }
 
-                    if not action_queue.empty():
-                        action = action_queue.get()
+                    if not self.smooth and not self.action_queue.empty():
+                        action = self.action_queue.get()
 
                     else:
                         action_chunk = self.infer_one_step(payload1, payload2, n_actions)
-                        joint_l = action_chunk[:, :7]
-                        gripper_l_ = action_chunk[:, -2]
-                        gripper_l = gripper_l_
-                        joint_r = action_chunk[:, 7:-2]
-                        gripper_r_ = action_chunk[:, -1]
-                        gripper_r = gripper_r_
+                        action_chunk = np.array(action_chunk.tolist())
 
-                        for idx, v in enumerate(gripper_l_):
+                        if not self.smooth:
+                            joint_l = action_chunk[:, :7]
+                            gripper_l_ = action_chunk[:, -2]
+                            gripper_l = gripper_l_ / 70
+                            joint_r = action_chunk[:, 7:-2]
+                            gripper_r_ = action_chunk[:, -1]
+                            gripper_r = gripper_r_ / 70
 
-                            if v < 0.5:
-                                gripper_l[idx] = 0
+                            for idx, v in enumerate(gripper_l_):
+
+                                if v < 0:
+                                    gripper_l[idx] = 0
+
+                            for idx, v in enumerate(gripper_r_):
+                                
+                                if v < 0:
+                                    gripper_r[idx] = 0
+
+                            gripper_l = gripper_l.unsqueeze(-1)
+                            gripper_r = gripper_r.unsqueeze(-1)
+
+                            action_chunk = torch.concat(
+                                (joint_l, gripper_l, joint_r, gripper_r), dim=1
+                            )
+                            for action in action_chunk:
+                                self.action_queue.put(action)
+
+                            action = self.action_queue.get()
+
+                        else:
+
+                            # Shift action buffer
+                            self.action_buffer[1:, :, :] = self.action_buffer[:-1, :, :]
+                            self.action_buffer_mask[1:, :] = self.action_buffer_mask[:-1, :]
+                            self.action_buffer[:, :-1, :] = self.action_buffer[:, 1:, :]
+                            self.action_buffer_mask[:, :-1] = self.action_buffer_mask[:, 1:]
+                            self.action_buffer_mask = self.action_buffer_mask * self.temporal_mask
+
+                            # Add to action buffer
+                            self.action_buffer[0] = action_chunk
+                            self.action_buffer_mask[0] = np.array(
+                                [True] * self.temporal_mask.shape[0], dtype=np.bool_
+                            )
+
+                            # Ensemble temporally to predict action
+                            action = np.sum(
+                                self.action_buffer[:, 0, :]
+                                * self.action_buffer_mask[:, 0:1]
+                                * self.temporal_weights,
+                                axis=0,
+                            ) / np.sum(self.action_buffer_mask[:, 0:1] * self.temporal_weights)
+
+                            joint_l = action[:7]
+                            gripper_l_ = action[-2]
+                            gripper_l = gripper_l_ / 70
+                            joint_r = action[7:-2]
+                            gripper_r_ = action[-1]
+                            gripper_r = gripper_r_ / 70
+
+                            print("lhd: ", gripper_l)
+                            print("rhd: ", gripper_r)
+                            
+                            if gripper_l_ < 0:
+                                gripper_l = np.array([0])
                             else:
-                                gripper_l[idx] = 1
+                                gripper_l = np.array([gripper_l])
 
-                        for idx, v in enumerate(gripper_r_):
-                            if v < 0.5:
-                                gripper_r[idx] = 0
+                            if gripper_r_ < 0:
+                                gripper_r = np.array([0])
                             else:
-                                gripper_r[idx] = 1
+                                gripper_r = np.array([gripper_r])
 
-                        gripper_l = gripper_l.unsqueeze(-1)
-                        gripper_r = gripper_r.unsqueeze(-1)
-
-                        action_chunk = torch.concat(
-                            (joint_l, gripper_l, joint_r, gripper_r), dim=1
-                        )
-                        for action in action_chunk:
-                            action_queue.put(action)
-
+                            action = np.concatenate((joint_l, gripper_l, joint_r, gripper_r))
+                    
                     sim_ros_node.publish_joint_command(action)
                 sim_ros_node.loop_rate.sleep()
 
 
 if __name__ == "__main__":
+
+    # name0 = "iros_clear_the_countertop_waste"
+    # name1 = "iros_restock_supermarket_items"
+    # name2 = "iros_clear_table_in_the_restaurant"
+    # name3 = "iros_stamp_the_seal"
+    # name4 = "iros_pack_in_the_supermarket"
+    # name5 = "iros_heat_the_food_in_the_microwave"
+    # name6 = "iros_open_drawer_and_store_items"
+    # name7 = "iros_pack_moving_objects_from_conveyor"
+    # name8 = "iros_pickup_items_from_the_freezer"
+    # name9 = "iros_make_a_sandwich"
     
     parser = argparse.ArgumentParser(description="config")
     parser.add_argument("--task_name", type=str)
@@ -257,6 +338,11 @@ if __name__ == "__main__":
     checkpoint_path = (
         "checkpoints/finetuned"
     )
-    rdtinfer = RDTInfer(checkpoint_path, task=args.task_name)
+    rdtinfer = RDTInfer(
+        checkpoint_path, 
+        task=args.task_name,
+        balancing_factor=0.1,
+        smooth=True,
+        )
 
-    pred_action = rdtinfer.infer(n_actions=64)
+    pred_action = rdtinfer.infer(n_actions=30)
