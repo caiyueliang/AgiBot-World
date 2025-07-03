@@ -30,7 +30,7 @@ pip install "flash-attn==2.5.5" --no-build-isolation
 
 - Download the weight of visual encoders from <td><a href="https://huggingface.co/google/siglip-so400m-patch14-384">siglip-so400m-patch14-384</a></td>.
 
-- Download the weight of pretrained RDT (TBD).
+- Download the weight of pretrained <td><a href="https://huggingface.co/OpenDriveLab-org/rdt-iros-manipulation-challenge-baseline/tree/main/awb-pretrained">RDT</a></td> (pretrain on AgiBot World).
 
 ### :four: Training
 

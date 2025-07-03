@@ -36,17 +36,17 @@ Results of baseline models. More detailed task descriptions and metric definitio
   </tr>
   <tr>
     <td>RDT</td>
-    <td>-</td>
-    <td>-</td>
-    <td>-</td>
-    <td>-</td>
-    <td>-</td>
-    <td>-</td>
-    <td>-</td>
-    <td>-</td>
-    <td>-</td>
-    <td>-</td>
-    <td>-</td>
+    <td>1.998</td>
+    <td>0.16</td>
+    <td>0</td>
+    <td>0.13</td>
+    <td>0</td>
+    <td>0.4</td>
+    <td>0.25</td>
+    <td>0.76</td>
+    <td>0.048</td>
+    <td>0.25</td>
+    <td>0</td>
   </tr>
 </table>
 
@@ -63,14 +63,14 @@ Results of baseline models. More detailed task descriptions and metric definitio
   <tr>
     <td>univla-iros-manipulation-challenge-baseline</td>
     <td><a href="https://huggingface.co/qwbu/univla-7b">UniVLA-7b</a></td>
-    <td><a href="https://huggingface.co/qwbu/univla-iros-manipulation-challenge-baseline">univla-iros-manipulation-challenge-baseline </a></td>
+    <td><a href="https://huggingface.co/qwbu/univla-iros-manipulation-challenge-baseline">univla-iros-manipulation-challenge-baseline</a></td>
     <td> Without pretraining on AgibotWorld dataset. Finetuned collectively on all challenge tasks. </td>
   </tr>
 
   <tr>
     <td>rdt-iros-manipulation-challenge-baseline</td>
-    <td>TBD</td>
-    <td>TBD</td>
+    <td><a href="https://huggingface.co/OpenDriveLab-org/rdt-iros-manipulation-challenge-baseline/tree/main/awb-pretrained">RDT</a></td>
+    <td><a href="https://huggingface.co/OpenDriveLab-org/rdt-iros-manipulation-challenge-baseline/tree/main/sim-finetuned">rdt-iros-manipulation-challenge-baseline</a></td>
     <td> Pretrained on AgibotWorld dataset. Finetuned collectively on all challenge tasks. </td>
   </tr>
 
@@ -123,4 +123,4 @@ Subfolder such as `2810051`, `2810083` comes from different tasks. You can move 
 -  [x] Evaluation code.
 -  [x] Finetuned UniVLA checkpoints on challenge simdata.
 -  [x] Updated simulation environment.
--  [ ] Finetuned RDT checkpoints on challenge simdata.
+-  [x] Finetuned RDT checkpoints on challenge simdata.
