@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent.parent.parent))
+sys.path.append(str(Path(__file__).parent.parent))
 from PIL import Image
 from dataclasses import dataclass
 from typing import Union
@@ -28,7 +29,7 @@ def resize_img(img, width, height):
 
 
 def get_instruction(task_name):
-    
+
     if task_name == "iros_clear_the_countertop_waste":
         lang = "Pick up the yellow functional beverage can on the table with the left arm.;Threw the yellow functional beverage can into the trash can with the left arm.;Pick up the green carbonated beverage can on the table with the right arm.;Threw the green carbonated beverage can into the trash can with the right arm."
     elif task_name == "iros_restock_supermarket_items":
@@ -51,7 +52,7 @@ def get_instruction(task_name):
         lang = "Pick up the bread slice from the toaster on the table with the right arm;Place the picked bread slice into the plate on the table with the right arm;Pick up the ham slice from the box on the table with the left arm;Place the picked ham slice onto the bread slice in the plate on the table with the left arm;Pick up the lettuce slice from the box on the table with the right arm;Place the picked lettuce slice onto the ham slice in the plate on the table with the right arm;Pick up the bread slice from the toaster on the table with the right arm;Place the bread slice onto the lettuce slice in the plate on the table with the right arm"
     else:
         raise ValueError("task does not exist")
-    
+
     return lang
 
 
@@ -130,7 +131,7 @@ class GenerateConfig:
     load_in_8bit: bool = False  # (For OpenVLA only) Load with 8-bit quantization
     load_in_4bit: bool = False  # (For OpenVLA only) Load with 4-bit quantization
 
-    center_crop: bool = False   # Center crop? (if trained w/ random crop image aug)
+    center_crop: bool = False  # Center crop? (if trained w/ random crop image aug)
     local_log_dir: str = "./experiments/eval_logs"  # Local directory for eval logs
     seed: int = 7
 
