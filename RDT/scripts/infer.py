@@ -1,6 +1,8 @@
 import os
 import sys
 from pathlib import Path
+
+sys.path.append(str(Path(__file__).parent.parent.parent))
 sys.path.append(str(Path(__file__).parent.parent))
 from typing import Any, Dict, Union
 import numpy as np
@@ -15,6 +17,7 @@ from cv_bridge import CvBridge
 from genie_sim_ros import SimROSNode
 from configs.state_vec import STATE_VEC_IDX_MAPPING
 import argparse
+
 np.random.seed(0)
 from queue import Queue
 
@@ -39,9 +42,7 @@ def make_policy(config_path, pretrained_model_name_or_path, ctrl_freq):
     with open(config_path, "r") as fp:
         config = yaml.safe_load(fp)
 
-    pretrained_vision_encoder_name_or_path = (
-        "google/siglip-so400m-patch14-384"
-    )
+    pretrained_vision_encoder_name_or_path = "google/siglip-so400m-patch14-384"
     model = create_model(
         args=config,
         dtype=torch.bfloat16,
@@ -106,7 +107,7 @@ class RDTInfer:
 
         self.action_queue = Queue()
         self.smooth = smooth
-        
+
     def predict_action(self, payload1: Dict[str, Any], payload2: Dict[str, Any]):
         # NOTE here we expect two frames of history
         # Assume current frame t, namely paload1: t-1, paload2:t
@@ -237,7 +238,9 @@ class RDTInfer:
                         action = self.action_queue.get()
 
                     else:
-                        action_chunk = self.infer_one_step(payload1, payload2, n_actions)
+                        action_chunk = self.infer_one_step(
+                            payload1, payload2, n_actions
+                        )
                         action_chunk = np.array(action_chunk.tolist())
 
                         if not self.smooth:
@@ -254,7 +257,7 @@ class RDTInfer:
                                     gripper_l[idx] = 0
 
                             for idx, v in enumerate(gripper_r_):
-                                
+
                                 if v < 0:
                                     gripper_r[idx] = 0
 
@@ -273,10 +276,16 @@ class RDTInfer:
 
                             # Shift action buffer
                             self.action_buffer[1:, :, :] = self.action_buffer[:-1, :, :]
-                            self.action_buffer_mask[1:, :] = self.action_buffer_mask[:-1, :]
+                            self.action_buffer_mask[1:, :] = self.action_buffer_mask[
+                                :-1, :
+                            ]
                             self.action_buffer[:, :-1, :] = self.action_buffer[:, 1:, :]
-                            self.action_buffer_mask[:, :-1] = self.action_buffer_mask[:, 1:]
-                            self.action_buffer_mask = self.action_buffer_mask * self.temporal_mask
+                            self.action_buffer_mask[:, :-1] = self.action_buffer_mask[
+                                :, 1:
+                            ]
+                            self.action_buffer_mask = (
+                                self.action_buffer_mask * self.temporal_mask
+                            )
 
                             # Add to action buffer
                             self.action_buffer[0] = action_chunk
@@ -290,7 +299,9 @@ class RDTInfer:
                                 * self.action_buffer_mask[:, 0:1]
                                 * self.temporal_weights,
                                 axis=0,
-                            ) / np.sum(self.action_buffer_mask[:, 0:1] * self.temporal_weights)
+                            ) / np.sum(
+                                self.action_buffer_mask[:, 0:1] * self.temporal_weights
+                            )
 
                             joint_l = action[:7]
                             gripper_l_ = action[-2]
@@ -301,7 +312,7 @@ class RDTInfer:
 
                             print("lhd: ", gripper_l)
                             print("rhd: ", gripper_r)
-                            
+
                             if gripper_l_ < 0:
                                 gripper_l = np.array([0])
                             else:
@@ -312,8 +323,10 @@ class RDTInfer:
                             else:
                                 gripper_r = np.array([gripper_r])
 
-                            action = np.concatenate((joint_l, gripper_l, joint_r, gripper_r))
-                    
+                            action = np.concatenate(
+                                (joint_l, gripper_l, joint_r, gripper_r)
+                            )
+
                     sim_ros_node.publish_joint_command(action)
                 sim_ros_node.loop_rate.sleep()
 
@@ -330,19 +343,17 @@ if __name__ == "__main__":
     # name7 = "iros_pack_moving_objects_from_conveyor"
     # name8 = "iros_pickup_items_from_the_freezer"
     # name9 = "iros_make_a_sandwich"
-    
+
     parser = argparse.ArgumentParser(description="config")
     parser.add_argument("--task_name", type=str)
     args = parser.parse_args()
-    
-    checkpoint_path = (
-        "checkpoints/finetuned"
-    )
+
+    checkpoint_path = "checkpoints/finetuned"
     rdtinfer = RDTInfer(
-        checkpoint_path, 
+        checkpoint_path,
         task=args.task_name,
         balancing_factor=0.1,
         smooth=True,
-        )
+    )
 
     pred_action = rdtinfer.infer(n_actions=30)
