@@ -127,7 +127,7 @@ After completing local debugging, you can submit your work on our <td><a href="h
 - In your code repository, you also need to provide the model checkpoint. By default, you should place the checkpoint in the directory `checkpoints/finetuned` and set the parameters "pretrained_checkpoint" and "action_decoder_path" in `scripts/infer.py` to `checkpoints/finetuned` (taking UniVLA as an example). Of course, you can change the location of the checkpoint as needed, as long as you also update the path parameters in `scripts/infer.py` accordingly.
 - If there are any new Python dependencies required, you need to list them in a `requirements.txt` file and upload it when submitting to the test server. For UniVLA and RDT, no new dependencies are needed, so you can simply submit an empty `requirements.txt` file (but it must be submitted). It is recommended that you thoroughly debug and validate locally before uploading.
 
-Illustration of the Code Repository File Structure
+Illustration of the code repository file structure: 
 
 ```
 your_repository/
