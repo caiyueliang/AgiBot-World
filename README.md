@@ -118,6 +118,31 @@ dataset
 ```
 Subfolder such as `2810051`, `2810083` comes from different tasks. You can move all of them into folder `dataset` as above, and then choose which task to use by modify `--task_ids` as below.
 
+## :rocket: Submission
+After completing local debugging, you can submit your work on our <td><a href="https://agibot-world.com/challenge/manipulation/my-submissions">test server</a></td>. Please note the following points:
+
+- You need to compress your code repository into a ZIP file before submission.
+- In your code repository, there must be a directory named `scripts`, and within this directory, there must be a file named `infer.py` for model inference. For the `infer.py` file, you need to have a parameter named `task_name` which can take the values of the 10 task names in our competition. For specific details, please refer to the <td><a href="https://github.com/OpenDriveLab/AgiBot-World/blob/manipulation-challenge/UniVLA/scripts/infer.py">inference script example</a></td> we provided. After you complete the submission, our test server will execute the default command `omni_python scripts/infer.py --task_name [task_name]` and iterate through all the tasks in sequence.
+- In your code repository, you must include the file `genie_sim_ros.py`, which is used for data communication between the model and the simulation environment. You can directly copy the file we provided. Of course, if needed, you can modify it yourself.
+- In your code repository, you also need to provide the model checkpoint. By default, you should place the checkpoint in the directory `checkpoints/finetuned` and set the parameters "pretrained_checkpoint" and "action_decoder_path" in `scripts/infer.py` to `checkpoints/finetuned` (taking UniVLA as an example). Of course, you can change the location of the checkpoint as needed, as long as you also update the path parameters in `scripts/infer.py` accordingly.
+5. If there are any new Python dependencies required, you need to list them in a `requirements.txt` file and upload it when submitting to the test server. For UniVLA and RDT, no new dependencies are needed, so you can simply submit an empty `requirements.txt` file (but it must be submitted). It is recommended that you thoroughly debug and validate locally before uploading.
+
+Illustration of the Code Repository File Structure
+
+```
+your_repository/
+├── scripts/
+│   ├── infer.py
+│   └── ...
+├── checkpoints/
+│   └── finetuned/
+│       ├── config.json
+│       ├── xxx.pt
+│       ├── xxx.safetensors
+│       └── ...
+├── genie_sim_ros.py
+└── ...
+```
 ## :pushpin: TODO list
 -  [x] Training code and dataloader for challenge dataset.
 -  [x] Evaluation code.
