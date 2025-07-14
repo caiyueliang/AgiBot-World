@@ -17,6 +17,10 @@ git clone -b manipulation-challenge https://github.com/OpenDriveLab/AgiBot-World
 cd UniVLA
 pip install -r requirements.txt
 
+git clone https://huggingface.co/spaces/LiheYoung/Depth-Anything
+cd Depth-Anything/torchhub/facebookresearch_dinov2_main
+pip install -e .
+
 # Install Flash Attention 2 for training (https://github.com/Dao-AILab/flash-attention)
 pip install packaging ninja
 ninja --version; echo $?  # Verify Ninja --> should return exit code "0"
