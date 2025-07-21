@@ -32,7 +32,12 @@ pip install "flash-attn==2.5.5" --no-build-isolation
 
 - Download the weight of pretrained <td><a href="https://huggingface.co/OpenDriveLab-org/rdt-iros-manipulation-challenge-baseline/tree/main/awb-pretrained">RDT</a></td> (pretrain on AgiBot World).
 
-### :four: Training
+### :two: Precomputing Data Statistics
+```bash
+python /mnt/chenjin/RDT/data/compute_dataset_stat_hdf5_a2d.py
+```
+
+### :three: Training
 
 ```bash
 # Start training with 8 GPUs
