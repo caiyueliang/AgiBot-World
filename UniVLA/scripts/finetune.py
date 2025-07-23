@@ -297,13 +297,12 @@ def finetune(cfg):
         dropout=0.,
     )
 
-    lam_ckpt = torch.load(cfg.lam_path)['state_dict']
-    new_ckpt = {}
-    for key in lam_ckpt.keys():
-        new_ckpt[key.replace("lam.", "")] = lam_ckpt[key]
-
-    latent_action_model.load_state_dict(new_ckpt, strict=True)
-    latent_action_model = latent_action_model.to(device_id).eval()
+    cpu_state = torch.load(cfg.lam_path, map_location="cpu")["state_dict"]
+    for name, param in latent_action_model.named_parameters():
+        param.data = cpu_state["lam." + name].to(device_id, non_blocking=True)
+        del cpu_state["lam." + name]  # 及时释放 CPU 副本
+    torch.cuda.empty_cache()
+    latent_action_model.eval()
     
     # Load gensim dataset
     from prismatic.vla.datasets import A2dDataset
