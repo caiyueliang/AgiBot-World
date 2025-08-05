@@ -45,51 +45,53 @@ def get_instruction(task_name):
     return lang
 
 
-def main(task):
+def main(task_list):
     
-    # Modify this to your task name and instruction
-    INSTRUCTION = get_instruction(task)
+    for task in task_list:
+        
+        INSTRUCTION = get_instruction(task)
 
-    with open(CONFIG_PATH, "r") as fp:
-        config = yaml.safe_load(fp)
+        with open(CONFIG_PATH, "r") as fp:
+            config = yaml.safe_load(fp)
 
-    device = torch.device(f"cuda:{GPU}")
-    text_embedder = T5Embedder(
-        from_pretrained=MODEL_PATH,
-        model_max_length=config["dataset"]["tokenizer_max_length"],
-        device=device,
-        use_offload_folder=OFFLOAD_DIR,
-    )
-    tokenizer, text_encoder = text_embedder.tokenizer, text_embedder.model
+        device = torch.device(f"cuda:{GPU}")
+        text_embedder = T5Embedder(
+            from_pretrained=MODEL_PATH,
+            model_max_length=config["dataset"]["tokenizer_max_length"],
+            device=device,
+            use_offload_folder=OFFLOAD_DIR,
+        )
+        tokenizer, text_encoder = text_embedder.tokenizer, text_embedder.model
 
-    tokenized_res = tokenizer(INSTRUCTION, return_tensors="pt", padding="longest", truncation=True)
-    tokens = tokenized_res["input_ids"].to(device)
-    attn_mask = tokenized_res["attention_mask"].to(device)
+        tokenized_res = tokenizer(INSTRUCTION, return_tensors="pt", padding="longest", truncation=True)
+        tokens = tokenized_res["input_ids"].to(device)
+        attn_mask = tokenized_res["attention_mask"].to(device)
 
-    with torch.no_grad():
-        text_embeds = text_encoder(input_ids=tokens, attention_mask=attn_mask)["last_hidden_state"].detach().cpu()
+        with torch.no_grad():
+            text_embeds = text_encoder(input_ids=tokens, attention_mask=attn_mask)["last_hidden_state"].detach().cpu()
 
-    attn_mask = attn_mask.cpu().bool()
-    pred = text_embeds[0, attn_mask[0]]
+        attn_mask = attn_mask.cpu().bool()
+        pred = text_embeds[0, attn_mask[0]]
 
-    save_path = os.path.join(SAVE_DIR, f"{task}.pt")
-    print(pred.shape)
-    torch.save(pred, save_path)
+        save_path = os.path.join(SAVE_DIR, f"{task}.pt")
+        print(pred.shape)
+        torch.save(pred, save_path)
 
-    print(f'"{INSTRUCTION}" is encoded by "{MODEL_PATH}" into shape {pred.shape} and saved to "{save_path}"')
+        print(f'"{INSTRUCTION}" is encoded by "{MODEL_PATH}" into shape {pred.shape} and saved to "{save_path}"')
 
 
 if __name__ == "__main__":
     
-    name0 = "iros_clear_the_countertop_waste"
-    name1 = "iros_restock_supermarket_items"
-    name2 = "iros_clear_table_in_the_restaurant"
-    name3 = "iros_stamp_the_seal"
-    name4 = "iros_pack_in_the_supermarket"
-    name5 = "iros_heat_the_food_in_the_microwave"
-    name6 = "iros_open_drawer_and_store_items"
-    name7 = "iros_pack_moving_objects_from_conveyor"
-    name8 = "iros_pickup_items_from_the_freezer"
-    name9 = "iros_make_a_sandwich"
-        
-    main(name0)
+    task_list = [
+        "iros_clear_the_countertop_waste",
+        "iros_restock_supermarket_items",
+        "iros_clear_table_in_the_restaurant",
+        "iros_stamp_the_seal",
+        "iros_heat_the_food_in_the_microwave",
+        "iros_open_drawer_and_store_items",
+        "iros_pack_moving_objects_from_conveyor",
+        "iros_pickup_items_from_the_freezer",
+        "iros_make_a_sandwich",
+    ]
+
+    main(task_list)

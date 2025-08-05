@@ -34,10 +34,15 @@ pip install "flash-attn==2.5.5" --no-build-isolation
 
 ### :two: Precomputing Data Statistics
 ```bash
-python /mnt/chenjin/RDT/data/compute_dataset_stat_hdf5_a2d.py
+python RDT/data/compute_dataset_stat_hdf5_a2d.py
 ```
 
-### :three: Training
+### :three: Precomputing Instruction Embedding
+```bash
+python RDT/scripts/encode_lang.py
+```
+
+### :four: Training
 
 ```bash
 # Start training with 8 GPUs
