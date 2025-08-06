@@ -4,7 +4,7 @@ import torch.nn as nn
 from experiments.robot.robot_utils import get_latent_action, get_model
 from experiments.robot.openvla_utils import get_processor
 from prismatic.models.policy.transformer_utils import MAPBlock
-from queue import Queue
+from collections import deque
 
 
 class ActionDecoder(torch.nn.Module):
@@ -16,11 +16,15 @@ class ActionDecoder(torch.nn.Module):
         window_size=30,
         hidden_dim=512,
         with_proprio=False,
+        wogripper=True,
     ):
         super().__init__()
 
         if with_proprio:
-            self.proprio_proj = nn.Linear(n_joints - 2, hidden_dim)  # remove gripper
+            if wogripper:
+                self.proprio_proj = nn.Linear(n_joints - 2, hidden_dim)
+            else:
+                self.proprio_proj = nn.Linear(n_joints, hidden_dim)
 
         self.proj_l = nn.Linear(2176, vis_dim)
         self.proj_r = nn.Linear(2176, vis_dim)
@@ -92,6 +96,7 @@ class ActionDecoderWrapper(nn.Module):
         n_joints=16,
         balancing_factor=0.01,
         with_proprio=False,
+        wogripper=True,
         smooth=False,
     ):
         super().__init__()
@@ -101,6 +106,7 @@ class ActionDecoderWrapper(nn.Module):
             hidden_dim=hidden_dim,
             n_joints=n_joints,
             with_proprio=with_proprio,
+            wogripper=wogripper,
         )
 
         self.with_proprio = with_proprio
@@ -125,7 +131,6 @@ class ActionDecoderWrapper(nn.Module):
             [np.exp(-1 * balancing_factor * i) for i in range(self.temporal_size)]
         )[:, None]
 
-        self.action_queue = Queue()
         self.smooth = smooth
 
     def reset(self):
@@ -138,78 +143,75 @@ class ActionDecoderWrapper(nn.Module):
 
     def forward(self, latent_actions, visual_embed, raw_visual, proprio=None):
 
-        if not self.smooth and not self.action_queue.empty():
-            action = self.action_queue.get()
+        action_queue = deque(maxlen=30)
+
+        # Run specialist policy
+        if self.with_proprio:
+            proprio = proprio.to(torch.float)
+        else:
+            proprio = None
+
+        # Forward action decoder
+        pred_action = self.net(
+            latent_actions.to(torch.float),
+            visual_embed.to(torch.float),
+            raw_visual.to(torch.float),
+            proprio,
+        ).reshape(-1, self.temporal_size, self.n_joints)
+        pred_action = np.array(pred_action.tolist())
+
+        if not self.smooth:
+
+            for action in pred_action[0]:
+
+                if action[-1] < 0:
+                    action[-1] = 0
+                elif action[-1] > 0.1:
+                    action[-1] = 1
+
+                if action[7] < 0:
+                    action[7] = 0
+                elif action[7] > 0.1:
+                    action[7] = 1
+
+                action_queue.append(action)
 
         else:
 
-            # Run specialist policy
-            if self.with_proprio:
-                proprio = proprio.to(torch.float)
-            else:
-                proprio = None
+            # Shift action buffer
+            self.action_buffer[1:, :, :] = self.action_buffer[:-1, :, :]
+            self.action_buffer_mask[1:, :] = self.action_buffer_mask[:-1, :]
+            self.action_buffer[:, :-1, :] = self.action_buffer[:, 1:, :]
+            self.action_buffer_mask[:, :-1] = self.action_buffer_mask[:, 1:]
+            self.action_buffer_mask = self.action_buffer_mask * self.temporal_mask
 
-            # Forward action decoder
-            pred_action = self.net(
-                latent_actions.to(torch.float),
-                visual_embed.to(torch.float),
-                raw_visual.to(torch.float),
-                proprio,
-            ).reshape(-1, self.temporal_size, self.n_joints)
-            pred_action = np.array(pred_action.tolist())
+            # Add to action buffer
+            self.action_buffer[0] = pred_action[0, :, :]
+            self.action_buffer_mask[0] = np.array(
+                [True] * self.temporal_mask.shape[0], dtype=np.bool_
+            )
 
-            if not self.smooth:
+            # Ensemble temporally to predict action
+            action = np.sum(
+                self.action_buffer[:, 0, :]
+                * self.action_buffer_mask[:, 0:1]
+                * self.temporal_weights,
+                axis=0,
+            ) / np.sum(self.action_buffer_mask[:, 0:1] * self.temporal_weights)
 
-                for action in pred_action[0]:
+            if action[-1] < 0.1:
+                action[-1] = 0
+            elif action[-1] > 0.1:
+                action[-1] = 1
 
-                    if action[-1] < 0.25:
-                        action[-1] = 0
-                    elif action[-1] > 0.25:
-                        action[-1] = 1
+            if action[7] < 0.1:
+                action[7] = 0
+            elif action[7] > 0.1:
+                action[7] = 1
 
-                    if action[7] < 0.25:
-                        action[7] = 0
-                    elif action[7] > 0.25:
-                        action[7] = 1
+            action_queue.append(action)
 
-                    self.action_queue.put(action)
-
-                action = self.action_queue.get()
-
-            else:
-
-                # Shift action buffer
-                self.action_buffer[1:, :, :] = self.action_buffer[:-1, :, :]
-                self.action_buffer_mask[1:, :] = self.action_buffer_mask[:-1, :]
-                self.action_buffer[:, :-1, :] = self.action_buffer[:, 1:, :]
-                self.action_buffer_mask[:, :-1] = self.action_buffer_mask[:, 1:]
-                self.action_buffer_mask = self.action_buffer_mask * self.temporal_mask
-
-                # Add to action buffer
-                self.action_buffer[0] = pred_action[0, :, :]
-                self.action_buffer_mask[0] = np.array(
-                    [True] * self.temporal_mask.shape[0], dtype=np.bool_
-                )
-
-                # Ensemble temporally to predict action
-                action = np.sum(
-                    self.action_buffer[:, 0, :]
-                    * self.action_buffer_mask[:, 0:1]
-                    * self.temporal_weights,
-                    axis=0,
-                ) / np.sum(self.action_buffer_mask[:, 0:1] * self.temporal_weights)
-
-                if action[-1] < 0.25:
-                    action[-1] = 0
-                elif action[-1] > 0.25:
-                    action[-1] = 1
-
-                if action[7] < 0.25:
-                    action[7] = 0
-                elif action[7] > 0.25:
-                    action[7] = 1
-
-        return action
+        return action_queue
 
 
 class WrappedModel(torch.nn.Module):
@@ -223,6 +225,7 @@ class WrappedModel(torch.nn.Module):
             hidden_dim=cfg.hidden_dim,
             balancing_factor=cfg.balancing_factor,
             with_proprio=cfg.with_proprio,
+            wogripper=cfg.wogripper,
             smooth=cfg.smooth,
         )
 
@@ -303,7 +306,6 @@ class WrappedGenieEvaluation:
         state = state.unsqueeze(0)
 
         # Get decoded action
-        # import ipdb;ipdb.set_trace()
         action = self.model.action_decoder(
             latent_action, visual_embed, raw_visual, state
         )

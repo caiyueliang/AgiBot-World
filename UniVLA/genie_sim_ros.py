@@ -11,6 +11,7 @@ from sensor_msgs.msg import (
     CompressedImage,
     JointState,
 )
+from std_msgs.msg import Bool
 from collections import deque
 import threading
 
@@ -25,7 +26,7 @@ QOS_PROFILE_LATEST = QoSProfile(
 
 
 class SimROSNode(Node):
-    def __init__(self, node_name="univla_node"):
+    def __init__(self, node_name="node"):
         super().__init__(
             node_name,
             parameter_overrides=[Parameter("use_sim_time", Parameter.Type.BOOL, True)],
@@ -67,6 +68,13 @@ class SimROSNode(Node):
             1,
         )
 
+        self.sub_infer_start = self.create_subscription(
+            Bool,
+            "/sim/infer_start",
+            self.callback_infer_start,
+            1,
+        )
+
         # msg
         self.lock_img_head = threading.Lock()
         self.lock_img_left_wrist = threading.Lock()
@@ -76,6 +84,7 @@ class SimROSNode(Node):
         self.lock_joint_state = threading.Lock()
         self.obs_joint_state = JointState()
         self.cur_joint_state = JointState()
+        self.infer_start = False
 
         # loop
         self.loop_rate = self.create_rate(30.0)
@@ -111,9 +120,11 @@ class SimROSNode(Node):
         with self.lock_img_right_wrist:
             return self.img_right_wrist
 
-    def publish_joint_command(self, action):
-
+    def publish_joint_command(self, action, is_end=False):
         cmd_msg = JointState()
+        if is_end:
+            cmd_msg.header.frame_id = "-1"
+
         cmd_msg.name = [
             "idx21_arm_l_joint1",
             "idx22_arm_l_joint2",
@@ -172,7 +183,9 @@ class SimROSNode(Node):
         msg_remap.position.append(joint_name_state_dict["idx25_arm_l_joint5"])
         msg_remap.position.append(joint_name_state_dict["idx26_arm_l_joint6"])
         msg_remap.position.append(joint_name_state_dict["idx27_arm_l_joint7"])
-        left_gripper_pos = min(1, max(0.0, (0.8 - (joint_name_state_dict["idx41_gripper_l_outer_joint1"]))))
+        left_gripper_pos = min(
+            1, max(0.0, (0.8 - (joint_name_state_dict["idx41_gripper_l_outer_joint1"])))
+        )
         msg_remap.position.append(left_gripper_pos)
 
         msg_remap.position.append(joint_name_state_dict["idx61_arm_r_joint1"])
@@ -182,7 +195,9 @@ class SimROSNode(Node):
         msg_remap.position.append(joint_name_state_dict["idx65_arm_r_joint5"])
         msg_remap.position.append(joint_name_state_dict["idx66_arm_r_joint6"])
         msg_remap.position.append(joint_name_state_dict["idx67_arm_r_joint7"])
-        right_gripper_pos = min(1, max(0.0, (0.8 - (joint_name_state_dict["idx81_gripper_r_outer_joint1"]))))
+        right_gripper_pos = min(
+            1, max(0.0, (0.8 - (joint_name_state_dict["idx81_gripper_r_outer_joint1"])))
+        )
         msg_remap.position.append(right_gripper_pos)
 
         with self.lock_joint_state:
@@ -192,3 +207,8 @@ class SimROSNode(Node):
         with self.lock_joint_state:
             return self.obs_joint_state
 
+    def callback_infer_start(self, msg):
+        self.infer_start = msg.data
+
+    def is_infer_start(self):
+        return self.infer_start

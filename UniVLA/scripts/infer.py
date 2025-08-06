@@ -1,23 +1,18 @@
 import os
 import sys
 from pathlib import Path
-
-from PIL import Image
+sys.path.append(str(Path(__file__).parent.parent.parent))
+sys.path.append(str(Path(__file__).parent.parent))
+from experiments.robot.geniesim.genie_model import WrappedGenieEvaluation, WrappedModel
+import rclpy
+import threading
+from cv_bridge import CvBridge
+import cv2
+from genie_sim_ros import SimROSNode
+import numpy as np
 from dataclasses import dataclass
 from typing import Union
-
-import cv2
-import numpy as np
 import draccus
-from experiments.robot.geniesim.genie_model import WrappedGenieEvaluation, WrappedModel
-
-import rclpy
-import time, threading
-from cv_bridge import CvBridge
-
-from genie_sim_ros import SimROSNode
-
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 def resize_img(img, width, height):
@@ -62,89 +57,92 @@ def get_sim_time(sim_ros_node):
 def infer(policy, cfg):
 
     rclpy.init()
-    current_path = os.getcwd()
     sim_ros_node = SimROSNode()
     spin_thread = threading.Thread(target=rclpy.spin, args=(sim_ros_node,))
     spin_thread.start()
-
+    init_frame = True
     bridge = CvBridge()
     count = 0
     SIM_INIT_TIME = 10
+    action_queue = None
 
     lang = get_instruction(cfg.task_name)
 
     while rclpy.ok():
-        img_h_raw = sim_ros_node.get_img_head()
-        img_l_raw = sim_ros_node.get_img_left_wrist()
-        img_r_raw = sim_ros_node.get_img_right_wrist()
-        act_raw = sim_ros_node.get_joint_state()
+        if action_queue:
+            is_end = True if len(action_queue) == 1 else False
+            action = action_queue.popleft()
+            sim_ros_node.publish_joint_command(action, is_end)
 
-        if (
-            img_h_raw
-            and img_l_raw
-            and img_r_raw
-            and act_raw
-            and img_h_raw.header.stamp
-            == img_l_raw.header.stamp
-            == img_r_raw.header.stamp
-        ):
-            sim_time = get_sim_time(sim_ros_node)
-            if sim_time > SIM_INIT_TIME:
-                print("cur sim time", sim_time)
-                count = count + 1
-                img_h = bridge.compressed_imgmsg_to_cv2(
-                    img_h_raw, desired_encoding="rgb8"
-                )
-                img_l = bridge.compressed_imgmsg_to_cv2(
-                    img_l_raw, desired_encoding="rgb8"
-                )
-                img_r = bridge.compressed_imgmsg_to_cv2(
-                    img_r_raw, desired_encoding="rgb8"
-                )
+        else:
+            img_h_raw = sim_ros_node.get_img_head()
+            img_l_raw = sim_ros_node.get_img_left_wrist()
+            img_r_raw = sim_ros_node.get_img_right_wrist()
+            act_raw = sim_ros_node.get_joint_state()
+            infer_start = sim_ros_node.is_infer_start()
 
-                # img_h_pil = Image.fromarray(img_h)
-                # img_h_pil.save(f'frames/head_{count:05d}.png')
-                # img_l_pil = Image.fromarray(img_l)
-                # img_l_pil.save(f'frames/wrist_l_{count:05d}.png')
-                # img_r_pil = Image.fromarray(img_r)
-                # img_r_pil.save(f'frames/wrist_r_{count:05d}.png')
+            if (init_frame or infer_start) and (
+                img_h_raw
+                and img_l_raw
+                and img_r_raw
+                and act_raw
+                and img_h_raw.header.stamp
+                == img_l_raw.header.stamp
+                == img_r_raw.header.stamp
+            ):
+                sim_time = get_sim_time(sim_ros_node)
+                if sim_time > SIM_INIT_TIME:
+                    init_frame = False
+                    print("cur sim time", sim_time, img_h_raw.header.stamp)
+                    count = count + 1
+                    img_h = bridge.compressed_imgmsg_to_cv2(
+                        img_h_raw, desired_encoding="rgb8"
+                    )
+                    img_l = bridge.compressed_imgmsg_to_cv2(
+                        img_l_raw, desired_encoding="rgb8"
+                    )
+                    img_r = bridge.compressed_imgmsg_to_cv2(
+                        img_r_raw, desired_encoding="rgb8"
+                    )
 
-                state = np.array(act_raw.position)
+                    state = np.array(act_raw.position)
 
-                if cfg.with_proprio:
-                    action = policy.step(img_h, img_l, img_r, lang, state)
-                else:
-                    action = policy.step(img_h, img_l, img_r, lang)
+                    if cfg.with_proprio:
+                        action_queue = policy.step(img_h, img_l, img_r, lang, state)
+                    else:
+                        action_queue = policy.step(img_h, img_l, img_r, lang)
 
-                sim_ros_node.publish_joint_command(action)
-                sim_ros_node.loop_rate.sleep()
+        sim_ros_node.loop_rate.sleep()
 
 
 @dataclass
 class GenerateConfig:
 
+    name = "finetuned"
+
     model_family: str = "openvla"  # Model family
-    pretrained_checkpoint: Union[str, Path] = "checkpoints/finetuned"
+    pretrained_checkpoint: Union[str, Path] = f"checkpoints/{name}"
 
     load_in_8bit: bool = False  # (For OpenVLA only) Load with 8-bit quantization
     load_in_4bit: bool = False  # (For OpenVLA only) Load with 4-bit quantization
 
     center_crop: bool = False  # Center crop? (if trained w/ random crop image aug)
     local_log_dir: str = "./experiments/eval_logs"  # Local directory for eval logs
-    seed: int = 7
+    seed: int = 0
 
-    action_decoder_path: str = "checkpoints/finetuned/action_decoder.pt"
+    action_decoder_path: str = f"checkpoints/{name}/action_decoder.pt"
     window_size: int = 30
 
     n_layers: int = 2
     hidden_dim: int = 1024
 
     with_proprio: bool = True
+    wogripper: bool = True
 
     smooth: bool = False
-    balancing_factor: float = 0.1  # larger for smoother
+    balancing_factor: float = 0.01  # larger for smoother
 
-    task_name: str = "iros_stamp_the_seal"
+    task_name: str = "iros_pack_in_the_supermarket"
 
 
 @draccus.wrap()
