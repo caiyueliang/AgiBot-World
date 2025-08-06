@@ -22,31 +22,31 @@ Results of baseline models. More detailed task descriptions and metric definitio
   </tr>
   <tr>
     <td>UniVLA</td>
-    <td>2.336</td>
-    <td>0.194</td>
-    <td>0</td>
-    <td>0.198</td>
-    <td>0</td>
-    <td>0.08</td>
-    <td>0.55</td>
+    <td>2.795</td>
+    <td>0.097</td>
+    <td>0.02</td>
+    <td>0.033</td>
+    <td>0.35</td>
+    <td>0.26</td>
+    <td>0.4</td>
     <td>1</td>
-    <td>0.064</td>
-    <td>0.25</td>
-    <td>0</td>
+    <td>0.08</td>
+    <td>0.375</td>
+    <td>0.18</td>
   </tr>
   <tr>
     <td>RDT</td>
-    <td>1.998</td>
-    <td>0.16</td>
+    <td>2.434</td>
+    <td>0.296</td>
     <td>0</td>
-    <td>0.13</td>
+    <td>0.133</td>
     <td>0</td>
-    <td>0.4</td>
+    <td>0.48</td>
     <td>0.25</td>
-    <td>0.76</td>
-    <td>0.048</td>
-    <td>0.25</td>
+    <td>0.825</td>
     <td>0</td>
+    <td>0.25</td>
+    <td>0.2</td>
   </tr>
 </table>
 
