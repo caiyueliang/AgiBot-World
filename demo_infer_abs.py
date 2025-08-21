@@ -79,7 +79,7 @@ def infer(policy, cfg):
 
                     # To be implemented
                     payload = None
-                    # delta_ee_pose in eef coordinate
+                    # delta_ee_pose in base_link coordinate
                     # shape 1x1x14: [[dx0, dy0, dz0, dR0, dP0, dY0, dx1, dy1, dz1, dR1, dP1, dY1, eef0, eef1]]
                     delta_ee_pose = policy.infer(payload)  
 
