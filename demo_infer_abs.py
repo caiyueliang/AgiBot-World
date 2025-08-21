@@ -79,10 +79,12 @@ def infer(policy, cfg):
 
                     # To be implemented
                     payload = None
-                    abs_actions = policy.infer(payload)
+                    # delta_ee_pose in eef coordinate
+                    # shape 1x1x14: [[dx0, dy0, dz0, dR0, dP0, dY0, dx1, dy1, dz1, dR1, dP1, dY1, eef0, eef1]]
+                    delta_ee_pose = policy.infer(payload)  
 
                     arm_joint_state = np.array(list(state[0:7]) + list(state[8:15]))
-                    abs_eef_action = ik_fk_solver.compute_abs_eef_from_base(abs_actions, arm_joint_state)
+                    abs_eef_action = ik_fk_solver.compute_abs_eef_from_base(delta_ee_pose, arm_joint_state)
                     joint_actions = ik_fk_solver.eef_actions_to_joint(abs_eef_action, arm_joint_state, init_head)
                     
                    
