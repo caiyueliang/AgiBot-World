@@ -30,7 +30,6 @@ def get_instruction(task_name):
     pass
 
 def infer(policy, cfg):
-
     rclpy.init()
     sim_ros_node = SimROSNode()
     spin_thread = threading.Thread(target=rclpy.spin, args=(sim_ros_node,))
@@ -103,8 +102,8 @@ def infer(policy, cfg):
                             joint_name_state_dict[name] = cur_joint_state.position[idx]
                         
                         init_waist = [
-                            joint_name_state_dict["idx01_body_joint1"],
-                            joint_name_state_dict["idx02_body_joint2"]
+                            joint_name_state_dict["idx02_body_joint2"],
+                            joint_name_state_dict["idx01_body_joint1"]
                         ]
                         
                         init_head = [
