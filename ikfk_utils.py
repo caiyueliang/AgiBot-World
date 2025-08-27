@@ -55,7 +55,24 @@ class IKFKSolver:
         q_full[0] = waist_init_position[1]
         q_full[1] = waist_init_position[0]
         self.base_T_center = self._solver.compute_fk(q=q_full, start_link="base_link", end_link="arm_base_link")
+        base_shift = np.zeros((4,4))
+        base_shift[2,3] = 0.3
+        self.base_bot_T_center = self.base_T_center + base_shift
         self.center_T_base = np.linalg.inv(self.base_T_center)
+        self.center_T_base_bot = np.linalg.inv(self.base_bot_T_center)
+
+        """
+        gripper center to arm end
+        """
+        right_arm_to_gripper_transform = np.eye(4)
+        right_arm_to_gripper_transform[2, 3] = 0.143
+        right_arm_to_gripper_transform[0, 0] = -1
+        right_arm_to_gripper_transform[1, 1] = -1
+        left_arm_to_gripper_transform = np.eye(4)
+        left_arm_to_gripper_transform[2, 3] = 0.143
+        self.right_arm_to_gripper_transform = right_arm_to_gripper_transform
+        self.left_arm_to_gripper_transform = left_arm_to_gripper_transform
+
 
     def eef_actions_to_joint(self, eef_actions, arm_joint_states, head_init_position):
         joint_actions = []
@@ -90,28 +107,8 @@ class IKFKSolver:
     
     def compute_abs_eef_from_base(self, actions, arm_joint_states):
         actions_np = np.array(actions)
-        left_joint_state = arm_joint_states[:7]
-        right_joint_state = arm_joint_states[7:14]
-
-        left_arm_T = self._solver.compute_part_fk(
-            q_part=np.array(left_joint_state, dtype=np.float32),
-            part=ik_solver.RobotPart.LEFT_ARM,
-            from_base=False,
-        )
-        right_arm_T = self._solver.compute_part_fk(
-            q_part=np.array(right_joint_state, dtype=np.float32),
-            part=ik_solver.RobotPart.RIGHT_ARM,
-            from_base=False,
-        )
-
-        left_arm_base = self.base_T_center @ left_arm_T
-        eefrot_left_xyzrpy = mat2xyzrpy(left_arm_base)
-
-        right_arm_base = self.base_T_center @ right_arm_T
-        eefrot_right_xyzrpy = mat2xyzrpy(right_arm_base)
-
-        eefrot_left_xyzrpy_last = eefrot_left_xyzrpy
-        eefrot_right_xyzrpy_last = eefrot_right_xyzrpy
+        # eefrot_xyzrpy in base_link frame
+        eefrot_left_xyzrpy_last, eefrot_right_xyzrpy_last = self.compute_abs_eef_in_base(arm_joint_states)
         abs_eef_actions = []
 
         for _, action in enumerate(actions_np):
@@ -121,10 +118,10 @@ class IKFKSolver:
             eefrot_left_xyzrpy_last = eefrot_left_xyzrpy_cur
             eefrot_right_xyzrpy_last = eefrot_right_xyzrpy_cur
 
-            eefrot_left_mat_cur_center = self.center_T_base @ xyzrpy2mat(eefrot_left_xyzrpy_cur)
+            eefrot_left_mat_cur_center = self.center_T_base_bot @ xyzrpy2mat(eefrot_left_xyzrpy_cur)
             eefrot_left_xyzrpy_cur_center = mat2xyzrpy(eefrot_left_mat_cur_center)
 
-            eefrot_right_mat_cur_center = self.center_T_base @ xyzrpy2mat(eefrot_right_xyzrpy_cur)
+            eefrot_right_mat_cur_center = self.center_T_base_bot @ xyzrpy2mat(eefrot_right_xyzrpy_cur)
             eefrot_right_xyzrpy_cur_center = mat2xyzrpy(eefrot_right_mat_cur_center)
 
             abs_eef_actions.append(
@@ -152,8 +149,8 @@ class IKFKSolver:
             from_base=False,
         )
 
-        eefrot_left_xyzrpy = mat2xyzrpy(left_arm_T)
-        eefrot_right_xyzrpy = mat2xyzrpy(right_arm_T)
+        eefrot_left_xyzrpy = mat2xyzrpy(left_arm_T @ self.left_arm_to_gripper_transform)
+        eefrot_right_xyzrpy = mat2xyzrpy(right_arm_T @ self.right_arm_to_gripper_transform)
 
         eefrot_left_xyzrpy_last = eefrot_left_xyzrpy
         eefrot_right_xyzrpy_last = eefrot_right_xyzrpy
@@ -171,3 +168,36 @@ class IKFKSolver:
             )
 
         return abs_eef_actions
+    
+
+    def compute_abs_eef_in_base(self, arm_joint_states):
+        left_joint_state = arm_joint_states[:7]
+        right_joint_state = arm_joint_states[7:14]
+
+        """
+        left_arm_T:  left arm end -> center
+        right_arm_T: right arm end -> center
+        """
+
+        left_arm_T = self._solver.compute_part_fk(
+            q_part=np.array(left_joint_state, dtype=np.float32),
+            part=ik_solver.RobotPart.LEFT_ARM,
+            from_base=False,
+        )
+        right_arm_T = self._solver.compute_part_fk(
+            q_part=np.array(right_joint_state, dtype=np.float32),
+            part=ik_solver.RobotPart.RIGHT_ARM,
+            from_base=False,
+        )
+
+        """
+        gripper -> base_bot = center -> base_bot @ arm end -> center @ gripper center -> arm end
+        """ 
+
+        left_arm_base = self.base_bot_T_center @ left_arm_T @ self.left_arm_to_gripper_transform
+        eefrot_left_xyzrpy = mat2xyzrpy(left_arm_base)
+
+        right_arm_base = self.base_bot_T_center @ right_arm_T @ self.right_arm_to_gripper_transform
+        eefrot_right_xyzrpy = mat2xyzrpy(right_arm_base)
+
+        return eefrot_left_xyzrpy, eefrot_right_xyzrpy
