@@ -84,16 +84,20 @@ class IKFKSolver:
         for _, action in enumerate(eef_actions):
             eefrot_left_cur = np.array(action[:6], dtype=np.float32)
             eefrot_right_cur = np.array(action[6:12], dtype=np.float32)
+            armend_left_cur_mat = xyzrpy2mat(eefrot_left_cur) * np.linalg.inv(self.left_arm_to_gripper_transform)
+            armend_right_cur_mat = xyzrpy2mat(eefrot_right_cur) * np.linalg.inv(self.right_arm_to_gripper_transform)
+            armend_left_cur = mat2xyzrpy(armend_left_cur_mat)
+            armend_right_cur = mat2xyzrpy(armend_right_cur_mat)
 
             self._solver.update_target_mat(
                 part=ik_solver.RobotPart.LEFT_ARM,
-                target_pos=eefrot_left_cur[:3],
-                target_rot=xyzrpy2mat(eefrot_left_cur)[0:3, 0:3],
+                target_pos=armend_left_cur[:3],
+                target_rot=armend_left_cur_mat[0:3, 0:3],
             )
             self._solver.update_target_mat(
                 part=ik_solver.RobotPart.RIGHT_ARM,
-                target_pos=eefrot_right_cur[:3],
-                target_rot=xyzrpy2mat(eefrot_right_cur)[0:3, 0:3],
+                target_pos=armend_right_cur[:3],
+                target_rot=armend_right_cur_mat[0:3, 0:3],
             )
 
             left_joints = self._solver.solve_left_arm()
