@@ -83,8 +83,10 @@ class IKFKSolver:
         for _, action in enumerate(eef_actions):
             eefrot_left_cur = np.array(action[:6], dtype=np.float32)
             eefrot_right_cur = np.array(action[6:12], dtype=np.float32)
+
             armend_left_cur_mat = xyzrpy2mat(eefrot_left_cur) @ np.linalg.inv(self.left_arm_to_gripper_transform)
             armend_right_cur_mat = xyzrpy2mat(eefrot_right_cur) @ np.linalg.inv(self.right_arm_to_gripper_transform)
+    
             armend_left_cur = mat2xyzrpy(armend_left_cur_mat)
             armend_right_cur = mat2xyzrpy(armend_right_cur_mat)
 
