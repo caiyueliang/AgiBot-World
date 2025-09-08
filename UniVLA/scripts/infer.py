@@ -1,7 +1,6 @@
 import os
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).parent.parent.parent))
 sys.path.append(str(Path(__file__).parent.parent))
 from experiments.robot.geniesim.genie_model import WrappedGenieEvaluation, WrappedModel
 import rclpy
