@@ -11,20 +11,6 @@ from typing import Union
 import draccus
 
 
-def get_instruction(task_name):
-
-    if task_name == "iros_pack_in_the_supermarket":
-        lang = "Pick up the grape juice on the table with the right arm.;Put the grape juice into the felt bag on the table with the right arm."
-    elif task_name == "iros_heat_the_food_in_the_microwave":
-        lang = "Open the door of the microwave oven with the right arm.;Pick up the plate with bread on the table with the right arm.;Put the plate containing bread into the microwave oven with the right arm.;Push the plate that was not placed properly into the microwave oven the right arm.;Close the door of the microwave oven with the left arm.;Press the start button on the right side of the microwave oven with the right arm."
-    elif task_name == "iros_pack_moving_objects_from_conveyor":
-        lang = "Pick up the hand cream from the conveyor belt with the right arm;Place the hand cream held in the right arm into the box on the table"
-    else:
-        raise ValueError("task does not exist")
-
-    return lang
-
-
 def init_node_pos(node, task_name):
     # upper head lower waist
     if task_name == "Pack groceries": # 1418

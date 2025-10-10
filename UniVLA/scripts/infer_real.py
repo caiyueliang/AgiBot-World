@@ -245,6 +245,7 @@ class GenerateConfig:
     hidden_dim: int = 1024
 
     with_proprio: bool = True
+    wogripper: bool = True
 
     smooth: bool = False
     balancing_factor: float = 0.1  # larger for smoother
