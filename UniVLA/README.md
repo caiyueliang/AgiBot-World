@@ -67,8 +67,15 @@ scripts/finetune.py \
 
 Once you finished training and get the action decoder and VLA backbone, you can simply start the evaluation with:
 
-## :chart_with_upwards_trend: Evaluation
+## :chart_with_upwards_trend: Evaluation in GenieSim
 ```bash
 omni_python scripts/infer.py --task_name test_task_name
 ```
 > In the inference process, we use ROS2 to achieve data communication between the model and the <td><a href="https://github.com/AgibotTech/genie_sim">Genie Sim Benchmark</a></td> simulation environment.
+
+## :bar_chart: Evaluation on G1 Robot
+```bash
+bash ./deploy.sh # env setup
+python scripts/set_zero_real.py --task_name test_task_name # set zero (if needed)
+python scripts/infer_real.py --task_name test_task_name # infer
+```

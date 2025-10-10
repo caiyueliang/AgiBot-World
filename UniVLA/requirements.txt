@@ -28,7 +28,7 @@ rich==14.0.0
 robosuite==1.4.1
 rotary_embedding_torch==0.8.4
 setuptools==57.5.0
-tensorflow==2.15.0
+tensorflow==2.10
 termcolor==3.0.1
 timm==0.9.10
 tokenizers==0.19.1
@@ -37,3 +37,11 @@ torchvision==0.17.0
 tqdm==4.66.4
 transformers==4.40.1
 webdataset==0.2.111
+einops_exts
+protobuf==3.12.4
+ruckig==0.14.0
+opencv-python==4.10.0.84
+scipy
+zmq==0.0.0
+pyzmq==26.2.0
+matplotlib
