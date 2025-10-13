@@ -98,8 +98,8 @@ class RobotNode:
         for i, traj in enumerate(trajs):
             print(f"Executing point {i+1}/{len(trajs)}")
             self.robot.move_arm(traj)
-            # time.sleep(interval)
-        # time.sleep(0.5)
+            time.sleep(interval)
+        time.sleep(0.5)
 
         self.robot.move_gripper([action[7], action[15]])
 
