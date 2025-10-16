@@ -25,7 +25,7 @@ import draccus
 #####################真机比赛任务的桌面设置######################
 # Pack groceries：桌面高度74cm, 距离机器人50cm
 # Microwave the food：桌面高度65-75cm（训练数据带桌面高度泛化）, 距离机器人53cm
-# Pack items from conveyor：桌面高度33cm（料框放在桌面上）, 距离机器人55cm
+# Pack items from conveyor：桌面高度55cm（料框放在桌面上）, 距离机器人33cm
 # Fold short sleeves：桌面高度75cm, 距离机器人43cm
 # Restock the hanging area：货架高度, 距离机器人82cm
 # Pour water：桌面高度75cm, 距离机器人51cm
@@ -123,7 +123,7 @@ def init_node_pos(node, task_name):
             ]
         waist_action = [
             0.5236, 
-            26,
+            24,
             ]
         joint_action = [
             -1.085, 0.5951, 0.3214, -1.279, 0.7025, 1.479, -0.1656, 0,
