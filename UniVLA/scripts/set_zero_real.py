@@ -48,7 +48,7 @@ def init_node_pos(node, task_name):
             ]
         waist_action = [
             0.5236, 
-            26,
+            24,
             ]
         joint_action = [
             -1.085, 0.5951, 0.3214, -1.279, 0.7025, 1.479, -0.1656, 0,
