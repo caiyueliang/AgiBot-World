@@ -129,7 +129,7 @@ def infer(policy, cfg):
                     action = policy.step(img_h, img_l, img_r, lang, state)  # 传入图像、语言、状态
                 else:
                     action = policy.step(img_h, img_l, img_r, lang)         # 仅传入图像和语言
-                print(f"[sim_time] {sim_time}; [state] {state}; [action] {action}")
+                print(f"[sim_time] {sim_time};\n [state] {state}; \n[action] {action}")
 
                 sim_ros_node.publish_joint_command(action)                  # 将模型输出的动作发送给机器人执行
                 sim_ros_node.loop_rate.sleep()                              # 按照设定的循环频率休眠，保持稳定控制周期
