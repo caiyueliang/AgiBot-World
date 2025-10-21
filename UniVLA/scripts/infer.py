@@ -84,11 +84,13 @@ def infer(policy, cfg):
 
     print("[start infer] run ...")
     while rclpy.ok():
-        img_h_raw = sim_ros_node.get_img_head()
-        img_l_raw = sim_ros_node.get_img_left_wrist()
-        img_r_raw = sim_ros_node.get_img_right_wrist()
-        act_raw = sim_ros_node.get_joint_state()
+        # 从仿真节点获取传感器数据
+        img_h_raw = sim_ros_node.get_img_head()           # 头部摄像头图像（原始 ROS 消息）
+        img_l_raw = sim_ros_node.get_img_left_wrist()     # 左手腕摄像头图像
+        img_r_raw = sim_ros_node.get_img_right_wrist()    # 右手腕摄像头图像
+        act_raw = sim_ros_node.get_joint_state()          # 当前关节状态（位置、速度等）
 
+        # 检查所有传感器数据是否有效，且时间戳一致（保证同步）
         if (
             img_h_raw
             and img_l_raw
@@ -98,9 +100,9 @@ def infer(policy, cfg):
             == img_l_raw.header.stamp
             == img_r_raw.header.stamp
         ):
-            sim_time = get_sim_time(sim_ros_node)
+            sim_time = get_sim_time(sim_ros_node)                           # 获取当前仿真时间
             if sim_time > SIM_INIT_TIME:
-                print("cur sim time", sim_time)
+                # print("cur sim time", sim_time)
                 count = count + 1
                 img_h = bridge.compressed_imgmsg_to_cv2(
                     img_h_raw, desired_encoding="rgb8"
@@ -121,15 +123,16 @@ def infer(policy, cfg):
                     img_r_pil.save(f'{save_dir}/wrist_r_{count:05d}.png')
                     print(f"Saved frame at count = {count}")
 
-                state = np.array(act_raw.position)
+                state = np.array(act_raw.position)                          # 提取当前机器人的关节位置作为本体感觉（proprioception）
 
                 if cfg.with_proprio:
-                    action = policy.step(img_h, img_l, img_r, lang, state)
+                    action = policy.step(img_h, img_l, img_r, lang, state)  # 传入图像、语言、状态
                 else:
-                    action = policy.step(img_h, img_l, img_r, lang)
+                    action = policy.step(img_h, img_l, img_r, lang)         # 仅传入图像和语言
+                print(f"[sim_time] {sim_time}; [state] {state}; [action] {action}")
 
-                sim_ros_node.publish_joint_command(action)
-                sim_ros_node.loop_rate.sleep()
+                sim_ros_node.publish_joint_command(action)                  # 将模型输出的动作发送给机器人执行
+                sim_ros_node.loop_rate.sleep()                              # 按照设定的循环频率休眠，保持稳定控制周期
 
 
 @dataclass
