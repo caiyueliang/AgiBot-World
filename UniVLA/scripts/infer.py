@@ -63,6 +63,7 @@ def get_sim_time(sim_ros_node):
 
 def infer(policy, cfg):
 
+    print("[start infer] ...")
     rclpy.init()
     current_path = os.getcwd()
     sim_ros_node = SimROSNode()
@@ -75,6 +76,7 @@ def infer(policy, cfg):
 
     lang = get_instruction(cfg.task_name)
 
+    print("[start infer] run ...")
     while rclpy.ok():
         img_h_raw = sim_ros_node.get_img_head()
         img_l_raw = sim_ros_node.get_img_left_wrist()
