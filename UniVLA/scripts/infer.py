@@ -8,6 +8,7 @@ from PIL import Image
 from dataclasses import dataclass
 from typing import Union
 
+from datetime import datetime
 import cv2
 import numpy as np
 import draccus
@@ -76,6 +77,11 @@ def infer(policy, cfg):
 
     lang = get_instruction(cfg.task_name)
 
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    save_dir = f"frames/{cfg.task_name}_{timestamp}"
+    os.makedirs(save_dir, exist_ok=True)
+    save_steps = 50
+
     print("[start infer] run ...")
     while rclpy.ok():
         img_h_raw = sim_ros_node.get_img_head()
@@ -106,12 +112,14 @@ def infer(policy, cfg):
                     img_r_raw, desired_encoding="rgb8"
                 )
 
-                # img_h_pil = Image.fromarray(img_h)
-                # img_h_pil.save(f'frames/head_{count:05d}.png')
-                # img_l_pil = Image.fromarray(img_l)
-                # img_l_pil.save(f'frames/wrist_l_{count:05d}.png')
-                # img_r_pil = Image.fromarray(img_r)
-                # img_r_pil.save(f'frames/wrist_r_{count:05d}.png')
+                if count % save_steps == 0:
+                    img_h_pil = Image.fromarray(img_h)
+                    img_h_pil.save(f'{save_dir}/head_{count:05d}.png')
+                    img_l_pil = Image.fromarray(img_l)
+                    img_l_pil.save(f'{save_dir}/wrist_l_{count:05d}.png')
+                    img_r_pil = Image.fromarray(img_r)
+                    img_r_pil.save(f'{save_dir}/wrist_r_{count:05d}.png')
+                    print(f"Saved frame at count = {count}")
 
                 state = np.array(act_raw.position)
 
