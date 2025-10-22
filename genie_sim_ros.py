@@ -16,6 +16,8 @@ import threading
 
 import numpy as np
 
+# 定义一个QoS配置，用于发布者和订阅者。此配置指定保留最后30条消息的历史记录策略，
+# 可靠性策略设置为可靠（确保消息不会丢失），持久性策略设置为瞬时本地（意味着消息可以在节点启动前被发布）。
 QOS_PROFILE_LATEST = QoSProfile(
     history=QoSHistoryPolicy.KEEP_LAST,
     depth=30,
@@ -26,19 +28,20 @@ QOS_PROFILE_LATEST = QoSProfile(
 
 class SimROSNode(Node):
     def __init__(self, node_name="univla_node"):
+        # 初始化节点，设置参数use_sim_time为True以使用仿真时间
         super().__init__(
             node_name,
             parameter_overrides=[Parameter("use_sim_time", Parameter.Type.BOOL, True)],
         )
 
-        # publish
+        # publish，创建发布者，用于发布目标关节状态
         self.pub_joint_command = self.create_publisher(
             JointState,
             "/sim/target_joint_state",
             QOS_PROFILE_LATEST,
         )
 
-        # subscribe
+        # subscribe，创建多个订阅者，分别用于接收头部、左腕部、右腕部的压缩图像以及当前关节状态
         self.sub_img_head = self.create_subscription(
             CompressedImage,
             "/sim/head_img",
@@ -67,7 +70,7 @@ class SimROSNode(Node):
             1,
         )
 
-        # msg
+        # msg，初始化锁和数据存储结构，用于保护并发访问的数据
         self.lock_img_head = threading.Lock()
         self.lock_img_left_wrist = threading.Lock()
         self.lock_img_right_wrist = threading.Lock()
@@ -77,7 +80,7 @@ class SimROSNode(Node):
         self.obs_joint_state = JointState()
         self.cur_joint_state = JointState()
 
-        # loop
+        # loop，设置循环频率为30Hz
         self.loop_rate = self.create_rate(30.0)
 
         self.img_head = None
@@ -112,6 +115,7 @@ class SimROSNode(Node):
             return self.img_right_wrist
 
     def publish_joint_command(self, action):
+        """根据给定的动作发布新的关节命令"""
 
         cmd_msg = JointState()
         cmd_msg.name = [
@@ -153,6 +157,7 @@ class SimROSNode(Node):
         self.pub_joint_command.publish(cmd_msg)
 
     def callback_joint_state(self, msg):
+        """处理接收到的关节状态消息，并重新映射到一个新的JointState对象中"""
         # print(msg.header)
         self.cur_joint_state = msg
 
@@ -172,7 +177,7 @@ class SimROSNode(Node):
         msg_remap.position.append(joint_name_state_dict["idx25_arm_l_joint5"])
         msg_remap.position.append(joint_name_state_dict["idx26_arm_l_joint6"])
         msg_remap.position.append(joint_name_state_dict["idx27_arm_l_joint7"])
-        left_gripper_pos = min(1, max(0.0, (0.8 - (joint_name_state_dict["idx41_gripper_l_outer_joint1"]))))
+        left_gripper_pos = min(1, max(0.0, (0.8 - (joint_name_state_dict["idx41_gripper_l_outer_joint1"]))))    # 对左右抓取器位置进行特殊处理
         msg_remap.position.append(left_gripper_pos)
 
         msg_remap.position.append(joint_name_state_dict["idx61_arm_r_joint1"])
@@ -182,13 +187,14 @@ class SimROSNode(Node):
         msg_remap.position.append(joint_name_state_dict["idx65_arm_r_joint5"])
         msg_remap.position.append(joint_name_state_dict["idx66_arm_r_joint6"])
         msg_remap.position.append(joint_name_state_dict["idx67_arm_r_joint7"])
-        right_gripper_pos = min(1, max(0.0, (0.8 - (joint_name_state_dict["idx81_gripper_r_outer_joint1"]))))
+        right_gripper_pos = min(1, max(0.0, (0.8 - (joint_name_state_dict["idx81_gripper_r_outer_joint1"]))))    # 对左右抓取器位置进行特殊处理
         msg_remap.position.append(right_gripper_pos)
 
         with self.lock_joint_state:
             self.obs_joint_state = msg_remap
 
     def get_joint_state(self):
+        """获取当前的关节状态"""
         with self.lock_joint_state:
             return self.obs_joint_state
 
