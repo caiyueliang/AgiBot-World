@@ -34,14 +34,14 @@ class SimROSNode(Node):
             parameter_overrides=[Parameter("use_sim_time", Parameter.Type.BOOL, True)],
         )
 
-        # publish，创建发布者，用于发布目标关节状态
+        # publish，创建发布者（模型/客户端 -> 仿真环境），用于发布目标关节状态
         self.pub_joint_command = self.create_publisher(
             JointState,
             "/sim/target_joint_state",
             QOS_PROFILE_LATEST,
         )
 
-        # subscribe，创建多个订阅者，分别用于接收头部、左腕部、右腕部的压缩图像以及当前关节状态
+        # subscribe，创建多个订阅者（仿真环境 -> 模型/客户端），分别用于接收头部、左腕部、右腕部的压缩图像以及当前关节状态
         self.sub_img_head = self.create_subscription(
             CompressedImage,
             "/sim/head_img",
@@ -63,6 +63,7 @@ class SimROSNode(Node):
             1,
         )
 
+        # subscribe，创建订阅者（仿真环境 -> 模型/客户端），获取模拟环境中的当前机器人关节状态
         self.sub_js = self.create_subscription(
             JointState,
             "/joint_states",
