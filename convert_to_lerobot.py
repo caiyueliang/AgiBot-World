@@ -390,7 +390,7 @@ class AgiBotDataset(LeRobotDataset):
         # 👇 在这里移除 'task'，因为它不是 features 的一部分
         if 'task' in episode_buffer:
             episode_buffer.pop('task')
-            
+
         # 检查缓冲区键是否与特征匹配
         if not set(episode_buffer.keys()) == set(self.features):
             raise ValueError()
@@ -432,6 +432,7 @@ class AgiBotDataset(LeRobotDataset):
             episode_buffer[key] = video_path
             video_path.parent.mkdir(parents=True, exist_ok=True)  # 创建目录
             shutil.copyfile(videos[key], video_path)  # 复制视频文件
+            print(f"[save_episode][key] {key}, video_path: {video_path}, videos[key]: {videos[key]}")
         
         if not episode_data:  # 重置缓冲区
             self.episode_buffer = self.create_episode_buffer()
