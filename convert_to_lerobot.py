@@ -385,6 +385,12 @@ class AgiBotDataset(LeRobotDataset):
 
         task_index = self.meta.get_task_index(task)  # 获取任务索引
 
+        print(f"[save_episode][episode_buffer.keys()] {episode_buffer.keys()}")
+        print(f"[save_episode][self.features] {self.features}")
+        # 👇 在这里移除 'task'，因为它不是 features 的一部分
+        if 'task' in episode_buffer:
+            episode_buffer.pop('task')
+            
         # 检查缓冲区键是否与特征匹配
         if not set(episode_buffer.keys()) == set(self.features):
             raise ValueError()
