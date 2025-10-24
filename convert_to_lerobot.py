@@ -458,6 +458,9 @@ class AgiBotDataset(LeRobotDataset):
         # 保存元数据
         self.meta.save_episode(episode_index, episode_length, task, task_index)
 
+        # self._wait_image_writer()  # 等待图像写入完成
+        # self._save_episode_table(episode_buffer, episode_index)  # 保存回合数据表
+
         if not episode_data:  # 重置缓冲区
             self.episode_buffer = self.create_episode_buffer()
         self.consolidated = False  # 标记为未整合
