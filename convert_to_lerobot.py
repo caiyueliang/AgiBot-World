@@ -450,16 +450,13 @@ class AgiBotDataset(LeRobotDataset):
 
             try:
                 shutil.copyfile(videos[key], video_path)  # 复制视频文件
-                print(f"[save_episode][key] {key}, old_video: {videos[key]} -> video_path: {video_path}, ")
+                print(f"[save_episode][key] {key}, old_video: {videos[key]} -> video_path: {video_path}")
             except Exception as e:
                 print(f"[save_episode]复制视频文件失败: {e}")
                 continue
 
         # 保存元数据
         self.meta.save_episode(episode_index, episode_length, task, task_index)
-
-        # self._wait_image_writer()  # 等待图像写入完成
-        # self._save_episode_table(episode_buffer, episode_index)  # 保存回合数据表
 
         if not episode_data:  # 重置缓冲区
             self.episode_buffer = self.create_episode_buffer()
