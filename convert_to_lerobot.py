@@ -227,7 +227,7 @@ def get_stats_einops_patterns(dataset, num_workers=0):
     return stats_patterns
 
 
-def compute_stats(dataset, batch_size=8, num_workers=4, max_num_samples=None):
+def compute_stats(dataset, batch_size=1, num_workers=0, max_num_samples=None):
     """计算LeRobotDataset中所有数据键的均值/标准差和最小值/最大值统计信息。"""
     if max_num_samples is None:
         max_num_samples = len(dataset)
@@ -455,7 +455,11 @@ class AgiBotDataset(LeRobotDataset):
                 print(f"[save_episode]复制视频文件失败: {e}")
                 continue
 
-        # 保存元数据
+        # import ipdb
+        # ipdb.set_trace()
+        # self.meta.save_episode(episode_index, episode_length, task, task_index)
+        if task_index is None:
+            task_index = {}
         self.meta.save_episode(episode_index, episode_length, task, task_index)
 
         if not episode_data:  # 重置缓冲区
@@ -471,13 +475,22 @@ class AgiBotDataset(LeRobotDataset):
             self.meta.episodes, self.episodes
         )
         # 检查时间戳同步
+        # check_timestamps_sync(
+        #     self.hf_dataset, self.episode_data_index, self.fps, self.tolerance_s
+        # )
         check_timestamps_sync(
-            self.hf_dataset, self.episode_data_index, self.fps, self.tolerance_s
+            timestamps=np.array(self.hf_dataset["timestamp"]),           # 提取 timestamp 列
+            episode_indices=np.array(self.hf_dataset["episode_index"]),  # 提取 episode_index 列
+            episode_data_index=self.episode_data_index,                 # 正确传入 episode_data_index
+            fps=self.fps,
+            tolerance_s=self.tolerance_s,
+            raise_value_error=True
         )
         
         # 写入视频信息
         if len(self.meta.video_keys) > 0:
-            self.meta.write_video_info()
+            # self.meta.write_video_info()
+            self.meta.update_video_info
 
         # 清理图像文件（如果不保留）
         if not keep_image_files:
