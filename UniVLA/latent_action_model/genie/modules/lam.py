@@ -191,8 +191,10 @@ class ControllableDINOLatentActionModel(nn.Module):
         patch_token_dim = in_dim * patch_size ** 2
 
         self.dino_transform = transforms.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD)
-        # self.dino_encoder = torch.hub.load('latent_action_model/facebookresearch_dinov2_main', 'dinov2_vitb14_reg', source='local', pretrained=False)
-        self.dino_encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14_reg', pretrained=False)
+        self.dino_encoder = torch.hub.load('latent_action_model/facebookresearch_dinov2_main', 'dinov2_vitb14_reg', source='local', pretrained=False)
+        # 如果没有，则用下面的命令下载，然后再拷贝到对应的目录下面(./AgiBot-World/UniVLA/latent_action_model/facebookresearch_dinov2_main/hubconf.py)
+        # self.dino_encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14_reg', pretrained=False)
+      
         self.dino_encoder.load_state_dict(torch.load('latent_action_model/facebookresearch_dinov2_main/dinov2_vitb14_reg4_pretrain.pth', map_location='cpu'))
         self.dino_encoder.requires_grad_(False)
 
