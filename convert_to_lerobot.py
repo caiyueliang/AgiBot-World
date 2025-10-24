@@ -367,6 +367,11 @@ class AgiBotDataset(LeRobotDataset):
         """
         我们重写此方法以将mp4视频复制到目标位置
         """
+        # import ipdb
+        # ipdb.set_trace()
+        print(f"[save_episode][task] {task}")
+        print(f"[save_episode][videos] {videos}")
+
         if not episode_data:
             episode_buffer = self.episode_buffer
 
@@ -423,17 +428,36 @@ class AgiBotDataset(LeRobotDataset):
         self._wait_image_writer()  # 等待图像写入完成
         self._save_episode_table(episode_buffer, episode_index)  # 保存回合数据表
 
-        # 保存元数据
-        self.meta.save_episode(episode_index, episode_length, task, task_index)
+        # TODO
+        # # 保存元数据
+        # self.meta.save_episode(episode_index, episode_length, task, task_index)
         
         # 处理视频文件
         for key in self.meta.video_keys:
             video_path = self.root / self.meta.get_video_file_path(episode_index, key)
             episode_buffer[key] = video_path
             video_path.parent.mkdir(parents=True, exist_ok=True)  # 创建目录
-            shutil.copyfile(videos[key], video_path)  # 复制视频文件
-            print(f"[save_episode][key] {key}, video_path: {video_path}, videos[key]: {videos[key]}")
-        
+
+            # 检查源视频文件是否存在
+            if videos is None or key not in videos:
+                print(f"[save_episode]警告: 视频键 '{key}' 在videos字典中不存在")
+                continue
+            
+            if not os.path.exists(videos[key]):
+                print(f"[save_episode]错误: 源视频文件不存在: {videos[key]}")
+                print(f"[save_episode]可用的视频键: {list(videos.keys()) if videos else 'None'}")
+                continue
+
+            try:
+                shutil.copyfile(videos[key], video_path)  # 复制视频文件
+                print(f"[save_episode][key] {key}, old_video: {videos[key]} -> video_path: {video_path}, ")
+            except Exception as e:
+                print(f"[save_episode]复制视频文件失败: {e}")
+                continue
+
+        # 保存元数据
+        self.meta.save_episode(episode_index, episode_length, task, task_index)
+
         if not episode_data:  # 重置缓冲区
             self.episode_buffer = self.create_episode_buffer()
         self.consolidated = False  # 标记为未整合
@@ -641,6 +665,7 @@ def main(
             load_local_dataset(subdir, src_path=src_path, task_id=task_id)
             for subdir in tqdm(all_subdir_eids)
         ]
+        # print(f"[main] raw_datasets_before_filter: {raw_datasets_before_filter[0][1]}")
     else:
         # 生产环境下使用多进程并行处理
         raw_datasets_before_filter = process_map(
@@ -664,7 +689,7 @@ def main(
     
     # 生成任务描述列表
     all_subdir_episode_desc = [task_name] * len(all_subdir_eids)
-    print(all_subdir_episode_desc)
+    print(f"[all_subdir_episode_desc] {all_subdir_episode_desc}")
 
     # 将原始数据添加到数据集中
     for raw_dataset, episode_desc in zip(
