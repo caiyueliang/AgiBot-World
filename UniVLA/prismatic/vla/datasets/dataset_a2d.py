@@ -138,6 +138,7 @@ class BaseDataset(MetaDataset):
         self.task_dataset_processors = PipelineComposer(task_dataset_processors_cfg)
         self.task_runtime_processors = PipelineComposer(task_runtime_processors_cfg)
 
+        print(f"[BaseDataset] dataset_cfg: {dataset_cfg}")
         all_dataset_episode_info = []
         for idx, (task_id, task_config) in enumerate(dataset_cfg.items()):
             label_file_name = os.path.join(self.label_file_dir, task_config["label_file_name"])
