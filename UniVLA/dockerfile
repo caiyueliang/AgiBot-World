@@ -46,4 +46,13 @@ COPY ./requirements.txt /tmp
 RUN pip install -r /tmp/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 
+WORKDIR /workspace/univla
+COPY ./experiments /workspace/univla/experiments
+COPY ./InternVL /workspace/univla/InternVL
+COPY ./latent_action_model /workspace/univla/latent_action_model
+COPY ./prismatic /workspace/univla/prismatic
+COPY ./scripts /workspace/univla/scripts
+COPY ./hubconf.py /workspace/univla/hubconf.py
+COPY ./requirements.txt /workspace/univla/requirements.txt
+
 CMD ["bash"]
