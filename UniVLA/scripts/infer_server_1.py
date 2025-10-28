@@ -68,6 +68,7 @@ def load_model():
     if not model_loaded:
         print("Loading model...")
         cfg = GenerateConfig()
+        print(f"[cfg] {cfg}")
         wrapped_model = WrappedModel(cfg)
         wrapped_model.cuda()
         wrapped_model.eval()
