@@ -19,27 +19,15 @@ import cv2
 import numpy as np
 import draccus
 import logging
-from experiments.robot.geniesim.genie_model import WrappedGenieEvaluation, WrappedModel
 
 import rclpy
-import time, threading
+import threading
 from cv_bridge import CvBridge
 
 from genie_sim_ros import SimROSNode
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-
-# # 示例图像路径（替换为真实图像）
-# base_path = "/home/caiyueliang/AgiBot-World_28ad77d/UniVLA/frames/iros_clear_table_in_the_restaurant_20251028_111828/"
-# head_img_path = base_path + "head_00050.png"
-# wrist_left_img_path = base_path + "wrist_l_00050.png"
-# wrist_right_img_path = base_path + "wrist_r_00050.png"
-
-# # 读取图像并转为 base64
-# def image_path_to_base64(img_path):
-#     with open(img_path, "rb") as f:
-#         return base64.b64encode(f.read()).decode('utf-8')
 
 def image_to_base64(img_array):
     # 确保图像是 uint8 类型
@@ -198,8 +186,7 @@ def infer(cfg):
                     img_r_pil.save(f'{save_dir}/wrist_r_{count:05d}.png')
                     print(f"Saved frame at count = {count}")
 
-                # state = np.array(act_raw.position)                          # 提取当前机器人的关节位置作为本体感觉（proprioception）
-                state = act_raw.position
+                state = np.array(act_raw.position)                          # 提取当前机器人的关节位置作为本体感觉（proprioception）
                 # if cfg.with_proprio:
                 #     action = policy.step(img_h, img_l, img_r, lang, state)  # 传入图像、语言、状态
                 # else:
@@ -240,19 +227,6 @@ class GenerateConfig:
     task_name: str = "iros_stamp_the_seal"
 
 
-# @draccus.wrap()
-# def get_policy(cfg: GenerateConfig) -> None:
-
-#     wrapped_model = WrappedModel(cfg)
-#     wrapped_model.cuda()
-#     wrapped_model.eval()
-#     policy = WrappedGenieEvaluation(cfg, wrapped_model)
-
-#     return policy, cfg
-
-
 if __name__ == "__main__":
-    # cfg = get_policy()
-    # task_name = "iros_clear_table_in_the_restaurant"
     cfg = draccus.parse(GenerateConfig)
     infer(cfg)
