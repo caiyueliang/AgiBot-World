@@ -66,8 +66,11 @@ policy = None
 def load_model():
     global policy, model_loaded
     if not model_loaded:
+        if cfg is None:
+            raise ValueError("Config not loaded! Make sure to parse args before loading model.")
+        
         print("Loading model...")
-        cfg = GenerateConfig()
+        # cfg = GenerateConfig()
         print(f"[cfg] {cfg}")
         wrapped_model = WrappedModel(cfg)
         wrapped_model.cuda()
@@ -180,4 +183,6 @@ async def health_check():
 
 
 if __name__ == "__main__":
+    global cfg
+    cfg = draccus.parse(GenerateConfig)
     uvicorn.run(app, host="0.0.0.0", port=8000)

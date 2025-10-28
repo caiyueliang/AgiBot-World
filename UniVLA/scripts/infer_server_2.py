@@ -149,6 +149,7 @@ async def startup_event():
     global model_service
     try:
         config = GenerateConfig()
+        print(f"[startup_event] config: {config}")
         model_service = ModelInferenceService(config)
         model_service.load_model()
         print("Model service started successfully!")
