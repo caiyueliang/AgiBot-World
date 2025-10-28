@@ -41,6 +41,9 @@ app = FastAPI(title="Genie Robot Policy Inference API", version="0.1")
 
 @dataclass
 class GenerateConfig:
+    host: str = "0.0.0.0"
+    port: int = 8888
+    show_detail: str = False
     model_family: str = "openvla"
     pretrained_checkpoint: Union[str, Path] = "checkpoints/finetuned"
     load_in_8bit: bool = False
@@ -157,18 +160,19 @@ async def infer(request: InferenceRequest):
         # 获取模型
         policy = load_model()
 
-        logging.warning(f"[head_rgb] {type(head_rgb)}, {head_rgb.shape}")
-        logging.warning(f"[wrist_l_rgb] {type(wrist_l_rgb)}, {wrist_l_rgb.shape}")
-        logging.warning(f"[wrist_r_rgb] {type(wrist_r_rgb)}, {wrist_r_rgb.shape}")
-        logging.warning(f"[lang] {lang}")
-        logging.warning(f"[state] {state}")
+        if cfg.show_detail is True:
+            logging.warning(f"[head_rgb] {type(head_rgb)}, {head_rgb.shape}")
+            logging.warning(f"[wrist_l_rgb] {type(wrist_l_rgb)}, {wrist_l_rgb.shape}")
+            logging.warning(f"[wrist_r_rgb] {type(wrist_r_rgb)}, {wrist_r_rgb.shape}")
+            logging.warning(f"[lang] {lang}")
+            logging.warning(f"[state] {state}")
 
-        img_h_pil = Image.fromarray(head_rgb)
-        img_h_pil.save(f'{save_dir}/head.png')
-        img_l_pil = Image.fromarray(wrist_l_rgb)
-        img_l_pil.save(f'{save_dir}/wrist_l.png')
-        img_r_pil = Image.fromarray(wrist_r_rgb)
-        img_r_pil.save(f'{save_dir}/wrist_r.png')
+            img_h_pil = Image.fromarray(head_rgb)
+            img_h_pil.save(f'{save_dir}/head.png')
+            img_l_pil = Image.fromarray(wrist_l_rgb)
+            img_l_pil.save(f'{save_dir}/wrist_l.png')
+            img_r_pil = Image.fromarray(wrist_r_rgb)
+            img_r_pil.save(f'{save_dir}/wrist_r.png')
         
         # 执行推理
         with torch.no_grad():
@@ -201,4 +205,4 @@ async def health_check():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8888)
+    uvicorn.run(app, host=cfg.host, port=cfg.port)

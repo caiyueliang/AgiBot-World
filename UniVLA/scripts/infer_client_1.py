@@ -4,39 +4,6 @@ import base64
 from PIL import Image
 import numpy as np
 
-# 示例图像路径（替换为真实图像）
-base_path = "/home/caiyueliang/AgiBot-World_28ad77d/UniVLA/frames/iros_clear_table_in_the_restaurant_20251028_111828/"
-head_img_path = base_path + "head_00050.png"
-wrist_left_img_path = base_path + "wrist_l_00050.png"
-wrist_right_img_path = base_path + "wrist_r_00050.png"
-
-# 读取图像并转为 base64
-def image_to_base64(img_path):
-    with open(img_path, "rb") as f:
-        return base64.b64encode(f.read()).decode('utf-8')
-
-# 构造请求
-request_data = {
-    "head_img": image_to_base64(head_img_path),
-    "wrist_left_img": image_to_base64(wrist_left_img_path),
-    "wrist_right_img": image_to_base64(wrist_right_img_path),
-    "instruction": "Pick up the bowl on the table near the right arm with the right arm.;Place the bowl on the plate on the table with the right arm.",
-    "state":  [-1.106, 0.529, 0.454, -1.241, 0.584, 1.419, -0.076, 0.000, 
-               1.297, -0.814, -0.504, 1.077, -1.145, -1.398, 0.328, 0.000]  # 示例关节状态，16维
-}
-
-# 发送请求
-response = requests.post("http://localhost:8888/infer", json=request_data)
-
-print("state:", request_data["state"])
-if response.status_code == 200:
-    result = response.json()
-    print("Action:", result["action"])
-    print("Timestamp:", result["timestamp"])
-else:
-    print("Error:", response.json())
-
-
 import os
 import sys
 from pathlib import Path
@@ -62,6 +29,68 @@ from genie_sim_ros import SimROSNode
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+
+# # 示例图像路径（替换为真实图像）
+# base_path = "/home/caiyueliang/AgiBot-World_28ad77d/UniVLA/frames/iros_clear_table_in_the_restaurant_20251028_111828/"
+# head_img_path = base_path + "head_00050.png"
+# wrist_left_img_path = base_path + "wrist_l_00050.png"
+# wrist_right_img_path = base_path + "wrist_r_00050.png"
+
+# # 读取图像并转为 base64
+# def image_path_to_base64(img_path):
+#     with open(img_path, "rb") as f:
+#         return base64.b64encode(f.read()).decode('utf-8')
+
+def image_to_base64(img_array):
+    # 确保图像是 uint8 类型
+    if not isinstance(img_array, np.ndarray):
+        raise ValueError("Input is not a valid numpy array.")
+    
+    # 如果是灰度图，转成三通道（可选，根据你的模型需求）
+    if len(img_array.shape) == 2:
+        img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2BGR)
+    elif img_array.shape[2] == 1:
+        img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2BGR)
+    elif img_array.shape[2] == 3:
+        pass  # 正常彩色图像
+    else:
+        raise ValueError("Unsupported image format")
+
+    # 编码为 JPEG 格式（可改为 PNG，但 JPEG 更小）
+    success, encoded_image = cv2.imencode('.jpg', img_array, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    if not success:
+        raise ValueError("Could not encode image to JPEG")
+
+    # 转为 base64
+    return base64.b64encode(encoded_image.tobytes()).decode('utf-8')
+
+def post_request(head_img, wrist_l_img, wrist_r_img, instruction, state):
+    # 构造请求
+    base_url = cfg.url
+
+    if isinstance(state, np.ndarray):
+        state = state.tolist()
+
+    request_data = {
+        "head_img": image_to_base64(head_img),
+        "wrist_left_img": image_to_base64(wrist_l_img),
+        "wrist_right_img": image_to_base64(wrist_r_img),
+        "instruction": instruction,
+        "state":  state  # 示例关节状态，16维
+    }
+
+    # 发送请求
+    response = requests.post(base_url, json=request_data)
+
+    print("state:", request_data["state"])
+    if response.status_code == 200:
+        result = response.json()
+        print("Action:", result["action"])
+        print("Timestamp:", result["timestamp"])
+        return result["action"]
+    else:
+        print("Error:", response.json())
+        return []
 
 def resize_img(img, width, height):
     resized_img = cv2.resize(img, (width, height), interpolation=cv2.INTER_AREA)
@@ -103,9 +132,8 @@ def get_sim_time(sim_ros_node):
 
 
 def infer(cfg):
-
     print("[start infer] ...")
-    print("[start infer] cfg: {cfg}")
+    print(f"[start infer] cfg: {cfg}")
     rclpy.init()
     current_path = os.getcwd()
     sim_ros_node = SimROSNode()
@@ -170,12 +198,14 @@ def infer(cfg):
                     img_r_pil.save(f'{save_dir}/wrist_r_{count:05d}.png')
                     print(f"Saved frame at count = {count}")
 
-                state = np.array(act_raw.position)                          # 提取当前机器人的关节位置作为本体感觉（proprioception）
-
+                # state = np.array(act_raw.position)                          # 提取当前机器人的关节位置作为本体感觉（proprioception）
+                state = act_raw.position
                 # if cfg.with_proprio:
                 #     action = policy.step(img_h, img_l, img_r, lang, state)  # 传入图像、语言、状态
                 # else:
                 #     action = policy.step(img_h, img_l, img_r, lang)         # 仅传入图像和语言
+                action = post_request(head_img=img_h, wrist_l_img=img_l, wrist_r_img=img_r, instruction=lang, state=state)
+
                 print(f"[sim_time] {sim_time};\n [state] {state}; \n[action] {action}")
 
                 sim_ros_node.publish_joint_command(action)                  # 将模型输出的动作发送给机器人执行
@@ -184,6 +214,7 @@ def infer(cfg):
 
 @dataclass
 class GenerateConfig:
+    url: str = "http://localhost:8888/infer"
 
     model_family: str = "openvla"  # Model family
     pretrained_checkpoint: Union[str, Path] = "checkpoints/finetuned"
@@ -222,5 +253,6 @@ class GenerateConfig:
 
 if __name__ == "__main__":
     # cfg = get_policy()
-    task_name = "iros_clear_table_in_the_restaurant"
+    # task_name = "iros_clear_table_in_the_restaurant"
+    cfg = draccus.parse(GenerateConfig)
     infer(cfg)
