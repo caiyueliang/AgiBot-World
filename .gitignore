@@ -1,4 +1,5 @@
 *__pycache__/
 */frames/
 */tmp/
+*.log
 UniVLA/latent_action_model/facebookresearch_dinov2_main/dinov2_vitb14_reg4_pretrain.pth
