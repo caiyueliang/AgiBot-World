@@ -32,6 +32,7 @@ from experiments.robot.geniesim.genie_model import WrappedGenieEvaluation, Wrapp
 # 初始化 FastAPI 应用
 app = FastAPI(title="Genie Robot Policy Inference API", version="0.1")
 
+
 # ==============================
 # 配置类（与你原来的 GenerateConfig 一致）
 # ==============================
@@ -58,7 +59,7 @@ class GenerateConfig:
 # ==============================
 # 全局变量：模型加载
 # ==============================
-
+cfg = draccus.parse(GenerateConfig)
 model_loaded = False
 policy = None
 
@@ -70,7 +71,6 @@ def load_model():
             raise ValueError("Config not loaded! Make sure to parse args before loading model.")
         
         print("Loading model...")
-        # cfg = GenerateConfig()
         print(f"[cfg] {cfg}")
         wrapped_model = WrappedModel(cfg)
         wrapped_model.cuda()
@@ -183,6 +183,4 @@ async def health_check():
 
 
 if __name__ == "__main__":
-    global cfg
-    cfg = draccus.parse(GenerateConfig)
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8888)

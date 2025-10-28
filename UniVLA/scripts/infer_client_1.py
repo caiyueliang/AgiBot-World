@@ -5,9 +5,10 @@ from PIL import Image
 import numpy as np
 
 # 示例图像路径（替换为真实图像）
-head_img_path = "test_head.jpg"
-wrist_left_img_path = "test_wrist_l.jpg"
-wrist_right_img_path = "test_wrist_r.jpg"
+base_path = "/home/caiyueliang/AgiBot-World_28ad77d/UniVLA/frames/iros_clear_table_in_the_restaurant_20251028_111828/"
+head_img_path = base_path + "head_00050.png"
+wrist_left_img_path = base_path + "wrist_l_00050.png"
+wrist_right_img_path = base_path + "wrist_r_00050.png"
 
 # 读取图像并转为 base64
 def image_to_base64(img_path):
@@ -24,7 +25,7 @@ request_data = {
 }
 
 # 发送请求
-response = requests.post("http://localhost:8000/infer", json=request_data)
+response = requests.post("http://localhost:8888/infer", json=request_data)
 
 if response.status_code == 200:
     result = response.json()
