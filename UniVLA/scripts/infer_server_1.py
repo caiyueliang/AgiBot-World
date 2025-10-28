@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Union
 from pathlib import Path
 
+import os
 import sys
 
 # 添加你的项目路径
@@ -63,7 +64,9 @@ class GenerateConfig:
 cfg = draccus.parse(GenerateConfig)
 model_loaded = False
 policy = None
-
+timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+save_dir = f"tmp/{cfg.task_name}_{timestamp}"
+os.makedirs(save_dir, exist_ok=True)
 
 def load_model():
     global policy, model_loaded
@@ -121,7 +124,7 @@ def base64_to_pil(b64_str: str) -> Image.Image:
 def resize_img(img, width=224, height=224):
     img = cv2.resize(img, (width, height), interpolation=cv2.INTER_AREA)
     return np.array(img)
-
+    
 
 # ==============================
 # 推理接口
@@ -159,6 +162,14 @@ async def infer(request: InferenceRequest):
         logging.warning(f"[wrist_r_rgb] {type(wrist_r_rgb)}, {wrist_r_rgb.shape}")
         logging.warning(f"[lang] {lang}")
         logging.warning(f"[state] {state}")
+
+        img_h_pil = Image.fromarray(head_rgb)
+        img_h_pil.save(f'{save_dir}/head.png')
+        img_l_pil = Image.fromarray(wrist_l_rgb)
+        img_l_pil.save(f'{save_dir}/wrist_l.png')
+        img_r_pil = Image.fromarray(wrist_r_rgb)
+        img_r_pil.save(f'{save_dir}/wrist_r.png')
+        
         # 执行推理
         with torch.no_grad():
             if state is not None and policy.cfg.with_proprio:
