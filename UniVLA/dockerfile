@@ -1,0 +1,49 @@
+FROM tck-xinan-registry.cn-chengdu.cr.aliyuncs.com/wair/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
+
+# apt deps
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    libeigen3-dev \
+    netcat \
+    ffmpeg \
+    bash \
+    jq \
+    vim
+
+
+# install ros2 humble
+# setup timezone
+RUN echo 'Etc/UTC' > /etc/timezone && \
+    ln -s /usr/share/zoneinfo/Etc/UTC /etc/localtime && \
+    apt-get update && \
+    apt-get install -q -y --no-install-recommends tzdata locales software-properties-common curl && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN locale-gen en_US en_US.UTF-8 && update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+
+ENV LANG=en_US.UTF-8
+
+RUN add-apt-repository universe && \
+    curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
+
+# install packages
+RUN apt-get update && apt-get -y upgrade && \
+    apt-get install -q -y --no-install-recommends \
+    ros-dev-tools \
+    ros-humble-ros-base \
+    ros-humble-image-transport \
+    ros-humble-image-transport-plugins \
+    ros-humble-compressed-image-transport \
+    console-data \
+    git-lfs \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# pip install benchmark deps
+COPY ./requirements.txt /tmp
+RUN pip install -r /tmp/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+
+CMD ["bash"]
