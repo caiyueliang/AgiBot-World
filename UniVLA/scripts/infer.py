@@ -12,6 +12,7 @@ from datetime import datetime
 import cv2
 import numpy as np
 import draccus
+import logging
 from experiments.robot.geniesim.genie_model import WrappedGenieEvaluation, WrappedModel
 
 import rclpy
@@ -115,6 +116,12 @@ def infer(policy, cfg):
                 )
 
                 if count % save_steps == 0:
+                    logging.warning(f"[head_rgb] {type(img_h)}, {img_h.shape}")
+                    logging.warning(f"[wrist_l_rgb] {type(img_l)}, {img_l.shape}")
+                    logging.warning(f"[wrist_r_rgb] {type(img_r)}, {img_r.shape}")
+                    logging.warning(f"[lang] {lang}")
+                    logging.warning(f"[state] {state}")
+
                     img_h_pil = Image.fromarray(img_h)
                     img_h_pil.save(f'{save_dir}/head_{count:05d}.png')
                     img_l_pil = Image.fromarray(img_l)

@@ -28,6 +28,7 @@ import cv2
 import numpy as np
 import draccus
 from experiments.robot.geniesim.genie_model import WrappedGenieEvaluation, WrappedModel
+import logging
 
 # 初始化 FastAPI 应用
 app = FastAPI(title="Genie Robot Policy Inference API", version="0.1")
@@ -153,6 +154,11 @@ async def infer(request: InferenceRequest):
         # 获取模型
         policy = load_model()
 
+        logging.warning(f"[head_rgb] {type(head_rgb)}, {head_rgb.shape}")
+        logging.warning(f"[wrist_l_rgb] {type(wrist_l_rgb)}, {wrist_l_rgb.shape}")
+        logging.warning(f"[wrist_r_rgb] {type(wrist_r_rgb)}, {wrist_r_rgb.shape}")
+        logging.warning(f"[lang] {lang}")
+        logging.warning(f"[state] {state}")
         # 执行推理
         with torch.no_grad():
             if state is not None and policy.cfg.with_proprio:
@@ -169,6 +175,7 @@ async def infer(request: InferenceRequest):
         )
 
     except Exception as e:
+        logging.exception(e)
         raise HTTPException(status_code=500, detail=f"Inference failed: {str(e)}")
 
 
