@@ -20,13 +20,15 @@ request_data = {
     "head_img": image_to_base64(head_img_path),
     "wrist_left_img": image_to_base64(wrist_left_img_path),
     "wrist_right_img": image_to_base64(wrist_right_img_path),
-    "instruction": "Pick up the stamp from the ink pad with the right arm and stamp the document.",
-    "state": np.random.rand(14).tolist()  # 示例关节状态，14维
+    "instruction": "Pick up the bowl on the table near the right arm with the right arm.;Place the bowl on the plate on the table with the right arm.",
+    "state":  [-1.106, 0.529, 0.454, -1.241, 0.584, 1.419, -0.076, 0.000, 
+               1.297, -0.814, -0.504, 1.077, -1.145, -1.398, 0.328, 0.000]  # 示例关节状态，16维
 }
 
 # 发送请求
 response = requests.post("http://localhost:8888/infer", json=request_data)
 
+print("state:", request_data["state"])
 if response.status_code == 200:
     result = response.json()
     print("Action:", result["action"])
