@@ -5,6 +5,8 @@ RUN apt-get update && apt-get -y upgrade && \
     pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple  && \
     rm -rf /var/lib/apt/lists/*
 
+RUN pip install fastapi uvicorn -i https://pypi.tuna.tsinghua.edu.cn/simple
+RUN pip install nvidia-cublas-cu12==12.4.5.8 -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 WORKDIR /workspace/univla
 COPY ./experiments /workspace/univla/experiments
