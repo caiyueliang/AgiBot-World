@@ -43,8 +43,11 @@ RUN apt-get update && apt-get -y upgrade && \
 
 # pip install benchmark deps
 COPY ./requirements.txt /tmp
+RUN pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple && \
+    pip install --upgrade packaging setuptools wheel -i https://pypi.tuna.tsinghua.edu.cn/simple
 RUN pip install -r /tmp/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-
+RUN pip install packaging ninja -i https://pypi.tuna.tsinghua.edu.cn/simple
+RUN pip install "flash-attn==2.5.5" --no-build-isolation -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 WORKDIR /workspace/univla
 COPY ./experiments /workspace/univla/experiments
