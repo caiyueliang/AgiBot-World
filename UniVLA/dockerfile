@@ -16,5 +16,6 @@ COPY ./prismatic /workspace/univla/prismatic
 COPY ./scripts /workspace/univla/scripts
 COPY ./hubconf.py /workspace/univla/hubconf.py
 COPY ./requirements.txt /workspace/univla/requirements.txt
+COPY ./entrypoint.sh /workspace/univla/entrypoint.sh
 
-CMD ["bash"]
+CMD ["bash entrypoint.sh"]
