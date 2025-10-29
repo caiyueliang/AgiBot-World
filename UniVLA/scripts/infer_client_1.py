@@ -201,7 +201,7 @@ def infer(cfg):
 
 @dataclass
 class GenerateConfig:
-    url: str = "http://localhost:8888/infer"
+    url: str = "http://localhost:8888/act"
 
     model_family: str = "openvla"  # Model family
     pretrained_checkpoint: Union[str, Path] = "checkpoints/finetuned"

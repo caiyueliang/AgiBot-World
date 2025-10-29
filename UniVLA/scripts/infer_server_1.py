@@ -133,7 +133,7 @@ def resize_img(img, width=224, height=224):
 # 推理接口
 # ==============================
 
-@app.post("/infer", response_model=InferenceResponse)
+@app.post("/act", response_model=InferenceResponse)
 async def infer(request: InferenceRequest):
     try:
         # 解码图像
