@@ -26,7 +26,7 @@ request_data = {
 }
 
 # 发送请求
-response = requests.post("http://localhost:8888/infer", json=request_data)
+response = requests.post("http://localhost:8080/infer", json=request_data)
 
 print("state:", request_data["state"])
 if response.status_code == 200:
