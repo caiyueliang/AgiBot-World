@@ -62,7 +62,6 @@ def main():
 
     # 4. 发送请求
     print(f"[INFO] POST -> {args.url}")
-    print(f"[INFO] headers -> {headers}")
     response = requests.post(args.url, json=request_data, headers=headers)
 
     # 5. 处理返回
