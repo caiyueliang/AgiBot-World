@@ -5,6 +5,7 @@
 import argparse
 import base64
 import requests
+import time
 from pathlib import Path
 
 # -------------------- 命令行解析 --------------------
@@ -35,20 +36,17 @@ def main():
     args = parse_args()
 
     # 1. 本地图像路径（按需修改）
-    base_path = "/home/caiyueliang/AgiBot-World_28ad77d/UniVLA/frames/iros_clear_table_in_the_restaurant_20251028_111828/"
+    base_path = "./images/iros_clear_table_in_the_restaurant_20251028_111828/"
     head_img_path = base_path + "head_00050.png"
     wrist_left_img_path = base_path + "wrist_l_00050.png"
     wrist_right_img_path = base_path + "wrist_r_00050.png"
 
     # 2. 构造 JSON 请求体
     request_data = {
-        "head_img": image_to_base64(head_img_path),
-        "wrist_left_img": image_to_base64(wrist_left_img_path),
-        "wrist_right_img": image_to_base64(wrist_right_img_path),
-        "instruction": (
-            "Pick up the bowl on the table near the right arm with the right arm.;"
-            "Place the bowl on the plate on the table with the right arm."
-        ),
+        "image": image_to_base64(head_img_path),
+        "wrist_image_l": image_to_base64(wrist_left_img_path),
+        "wrist_image_r": image_to_base64(wrist_right_img_path),
+        "prompt": "Pick up the bowl on the table near the right arm with the right arm.",
         "state": [
             -1.106, 0.529, 0.454, -1.241, 0.584, 1.419, -0.076, 0.000,
             1.297, -0.814, -0.504, 1.077, -1.145, -1.398, 0.328, 0.000,
@@ -62,7 +60,10 @@ def main():
 
     # 4. 发送请求
     print(f"[INFO] POST -> {args.url}")
+    start = time.time()
     response = requests.post(args.url, json=request_data, headers=headers)
+    end = time.time()
+    print(f"[INFO] Response time: {end - start:.4f} seconds")
 
     # 5. 处理返回
     print("state:", request_data["state"])

@@ -60,10 +60,10 @@ def post_request(head_img, wrist_l_img, wrist_r_img, instruction, state):
         state = state.tolist()
 
     request_data = {
-        "head_img": image_to_base64(head_img),
-        "wrist_left_img": image_to_base64(wrist_l_img),
-        "wrist_right_img": image_to_base64(wrist_r_img),
-        "instruction": instruction,
+        "image": image_to_base64(head_img),
+        "wrist_image_l": image_to_base64(wrist_l_img),
+        "wrist_image_r": image_to_base64(wrist_r_img),
+        "prompt": instruction,
         "state":  state  # 示例关节状态，16维
     }
 

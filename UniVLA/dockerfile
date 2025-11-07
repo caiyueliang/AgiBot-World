@@ -10,6 +10,7 @@ RUN pip install nvidia-cublas-cu12==12.4.5.8 -i https://pypi.tuna.tsinghua.edu.c
 
 WORKDIR /workspace/univla
 COPY ./experiments /workspace/univla/experiments
+COPY ./images /workspace/univla/images
 COPY ./InternVL /workspace/univla/InternVL
 COPY ./latent_action_model /workspace/univla/latent_action_model
 COPY ./prismatic /workspace/univla/prismatic

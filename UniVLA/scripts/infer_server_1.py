@@ -9,6 +9,7 @@ from PIL import Image
 import base64
 from io import BytesIO
 import torch
+import time
 
 from dataclasses import dataclass
 from typing import Union
@@ -98,10 +99,10 @@ def startup_event():
 # ==============================
 
 class InferenceRequest(BaseModel):
-    head_img: str  # base64 encoded image
-    wrist_left_img: Optional[str] = None
-    wrist_right_img: Optional[str] = None
-    instruction: str
+    image: str  # base64 encoded image
+    wrist_image_l: Optional[str] = None
+    wrist_image_r: Optional[str] = None
+    prompt: str
     state: Optional[List[float]] = None  # joint positions
 
 
@@ -137,22 +138,24 @@ def resize_img(img, width=224, height=224):
 async def infer(request: InferenceRequest):
     try:
         # 解码图像
-        head_pil = base64_to_pil(request.head_img)
+        start_time = time.time()
+
+        head_pil = base64_to_pil(request.image)
         head_rgb = np.array(head_pil)
 
         wrist_l_rgb = None
         wrist_r_rgb = None
 
-        if request.wrist_left_img:
-            wrist_l_pil = base64_to_pil(request.wrist_left_img)
+        if request.wrist_image_l:
+            wrist_l_pil = base64_to_pil(request.wrist_image_l)
             wrist_l_rgb = np.array(wrist_l_pil)
 
-        if request.wrist_right_img:
-            wrist_r_pil = base64_to_pil(request.wrist_right_img)
+        if request.wrist_image_r:
+            wrist_r_pil = base64_to_pil(request.wrist_image_r)
             wrist_r_rgb = np.array(wrist_r_pil)
 
         # 获取语言指令
-        lang = request.instruction
+        prompt = request.prompt
 
         # 获取本体感觉（可选）
         state = np.array(request.state) if request.state else None
@@ -160,11 +163,12 @@ async def infer(request: InferenceRequest):
         # 获取模型
         policy = load_model()
 
+        process_time = time.time()
         if cfg.show_detail is True:
             logging.warning(f"[head_rgb] {type(head_rgb)}, {head_rgb.shape}")
             logging.warning(f"[wrist_l_rgb] {type(wrist_l_rgb)}, {wrist_l_rgb.shape}")
             logging.warning(f"[wrist_r_rgb] {type(wrist_r_rgb)}, {wrist_r_rgb.shape}")
-            logging.warning(f"[lang] {lang}")
+            logging.warning(f"[prompt] {prompt}")
             logging.warning(f"[state] {state}")
 
             img_h_pil = Image.fromarray(head_rgb)
@@ -177,9 +181,12 @@ async def infer(request: InferenceRequest):
         # 执行推理
         with torch.no_grad():
             if state is not None and policy.cfg.with_proprio:
-                action = policy.step(head_rgb, wrist_l_rgb, wrist_r_rgb, lang, state)
+                action = policy.step(head_rgb, wrist_l_rgb, wrist_r_rgb, prompt, state)
             else:
-                action = policy.step(head_rgb, wrist_l_rgb, wrist_r_rgb, lang)
+                action = policy.step(head_rgb, wrist_l_rgb, wrist_r_rgb, prompt)
+                
+        end_time = time.time()
+        print(f"[INFO] process: {process_time - start_time:.4f} s; infer: {end_time - process_time:.4f} s")
 
         action_list = action.tolist() if isinstance(action, np.ndarray) else action
 
