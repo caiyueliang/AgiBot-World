@@ -2,6 +2,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Optional
+from typing import Any, Dict
 import uvicorn
 import cv2
 import numpy as np
@@ -10,6 +11,7 @@ import base64
 from io import BytesIO
 import torch
 import time
+import logging
 
 from dataclasses import dataclass
 from typing import Union
@@ -35,6 +37,7 @@ import logging
 # 初始化 FastAPI 应用
 app = FastAPI(title="Genie Robot Policy Inference API", version="0.1")
 
+states_len = os.getenv('STATES_LEN', 16)
 
 # ==============================
 # 配置类（与你原来的 GenerateConfig 一致）
@@ -43,7 +46,7 @@ app = FastAPI(title="Genie Robot Policy Inference API", version="0.1")
 @dataclass
 class GenerateConfig:
     host: str = "0.0.0.0"
-    port: int = 8888
+    port: int = 8080
     show_detail: str = False
     model_family: str = "openvla"
     pretrained_checkpoint: Union[str, Path] = "checkpoints/finetuned"
@@ -106,11 +109,14 @@ class InferenceRequest(BaseModel):
     state: Optional[List[float]] = None  # joint positions
 
 
+# class InferenceResponse(BaseModel):
+#     action: List[float]
+#     timestamp: str
+#     status: str
 class InferenceResponse(BaseModel):
-    action: List[float]
-    timestamp: str
-    status: str
-
+    status: int = 0
+    message: str = "success"
+    result: Dict[str, Any] = {}
 
 # ==============================
 # 工具函数
@@ -137,6 +143,9 @@ def resize_img(img, width=224, height=224):
 @app.post("/act", response_model=InferenceResponse)
 async def infer(request: InferenceRequest):
     try:
+        if len(request.state) != states_len:
+                return InferenceResponse(status=1, message=f"invalid state length, need size: (1 x {states_len})")
+        
         # 解码图像
         start_time = time.time()
 
@@ -186,19 +195,19 @@ async def infer(request: InferenceRequest):
                 action = policy.step(head_rgb, wrist_l_rgb, wrist_r_rgb, prompt)
                 
         end_time = time.time()
-        print(f"[INFO] process: {process_time - start_time:.4f} s; infer: {end_time - process_time:.4f} s")
+        logging.warning(f"[INFO] process: {process_time - start_time:.4f} s; infer: {end_time - process_time:.4f} s")
 
         action_list = action.tolist() if isinstance(action, np.ndarray) else action
 
-        return InferenceResponse(
-            action=action_list,
-            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            status="success"
-        )
+        result = {
+                "action": action_list,
+                "timestamp": timestamp,
+            }
+        return InferenceResponse(status=0, result=result, message="success")
 
     except Exception as e:
         logging.exception(e)
-        raise HTTPException(status_code=500, detail=f"Inference failed: {str(e)}")
+        return InferenceResponse(status=1, message=f"{str(e)}")
 
 
 # ==============================

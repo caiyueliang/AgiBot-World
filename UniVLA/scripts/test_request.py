@@ -48,11 +48,12 @@ def main():
         "wrist_image_r": image_to_base64(wrist_right_img_path),
         "prompt": "Pick up the bowl on the table near the right arm with the right arm.",
         "state": [
-            -1.106, 0.529, 0.454, -1.241, 0.584, 1.419, -0.076, 0.000,
-            1.297, -0.814, -0.504, 1.077, -1.145, -1.398, 0.328, 0.000,
+            -1.106, 0.529, 0.454, -1.241, 0.584, 1.419, -0.076, 0,
+            1.297, -0.814, -0.504, 1.077, -1.145, -1.398, 0.328, 0,
         ],
     }
-
+    print("state:", request_data["state"])
+    
     # 3. 构造请求头
     headers = {"Content-Type": "application/json"}
     if args.token:
@@ -66,12 +67,14 @@ def main():
     print(f"[INFO] Response time: {end - start:.4f} seconds")
 
     # 5. 处理返回
-    print("state:", request_data["state"])
     if response.status_code == 200:
         result = response.json()
-        print("Action:", result["action"])
-        print("Timestamp:", result["timestamp"])
+        if result["status"] == 0:
+            print("Action:", result["result"]["action"])
+        else:
+            print("Error message:", result)
     else:
+        print("Error Code: ", response.status_code)
         print("Error:", response.json())
 
 if __name__ == "__main__":
